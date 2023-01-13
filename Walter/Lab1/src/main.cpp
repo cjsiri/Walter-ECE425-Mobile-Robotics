@@ -87,7 +87,7 @@
  *    http://arduinoinfo.mywikis.net/wiki/HOME
 */
 
-//includew all necessary libraries
+//include all necessary libraries
 #include <Arduino.h>          //include for PlatformIO IDE
 #include <AccelStepper.h>     //include the stepper motor library
 #include <MultiStepper.h>     //include multiple stepper motor library
