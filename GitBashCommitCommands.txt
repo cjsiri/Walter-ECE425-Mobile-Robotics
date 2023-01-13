@@ -1,0 +1,15 @@
+Initializing -
+	On GitHub:
+		1. Create a repository
+
+	In Git Bash:
+		2. git init
+		3. git remote add origin https://github.com/cjsiri/Walter-ECE425-Mobile-Robotics.git
+		6. git pull --rebase origin HEAD:main
+
+In the future -
+	In Git Bash:
+		4. git add <file>
+		5. git commit -m '<message>'
+		6. git pull origin HEAD:main
+		7. git push origin HEAD:main
