@@ -17,6 +17,8 @@
 
 2x Photoresistors
 
+1x MPU6050 3-axis Gyroscope and 3-axis Accelerometer
+
 ### Motors
 2x 42HS40DF306 Stepper Motors with encoders
 
