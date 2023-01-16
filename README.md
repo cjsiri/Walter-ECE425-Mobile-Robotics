@@ -9,7 +9,9 @@
 1x Arduino Mega2560
 
 ### Sensors
-4x SHARP 2Y0A21 IR Sensors
+2x SHARP 2Y0A21 IR Sensors
+
+2x SHARP 2D120X IR Sensors
 
 2x HC-SR04 Sonar Sensors
 
@@ -31,6 +33,9 @@
 1x TENERGY Charger
 
 ## Hardware Connections
+
+
+
 
 ## File Storage
 
