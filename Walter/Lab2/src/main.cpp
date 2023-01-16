@@ -35,66 +35,81 @@
   Pushbutton  A15
 */
 
-#include <AccelStepper.h>//include the stepper motor library
-#include <MultiStepper.h>//include multiple stepper motor library
-#include <NewPing.h> //include sonar library
+//include all necessary libraries
+#include <Arduino.h>          //include for PlatformIO IDE
+#include <AccelStepper.h>     //include the stepper motor library
+#include <MultiStepper.h>     //include multiple stepper motor library
+#include <Adafruit_MPU6050.h> //Include library for MPU6050 IMU
+#include <SoftwareSerial.h>   //include Bluetooth module
+#include <NewPing.h>          //include Sonar library
 #include <TimerOne.h>
 #include <Wire.h>
 #include <SPI.h>
-#include <Adafruit_Sensor.h>
 #include <stdlib.h>
 #include <time.h>
-
-
-//define motor pin numbers
-#define stepperEnable 48    //stepper enable pin on stepStick 
-#define rtStepPin 50 //right stepper motor step pin 
-#define rtDirPin 51  // right stepper motor direction pin 
-#define ltStepPin 52 //left stepper motor step pin 
-#define ltDirPin 53  //left stepper motor direction pin 
-
-AccelStepper stepperRight(AccelStepper::DRIVER, rtStepPin, rtDirPin);//create instance of right stepper motor object (2 driver pins, low to high transition step pin 52, direction input pin 53 (high means forward)
-AccelStepper stepperLeft(AccelStepper::DRIVER, ltStepPin, ltDirPin);//create instance of left stepper motor object (2 driver pins, step pin 50, direction input pin 51)
-MultiStepper steppers;//create instance to control multiple steppers at the same time
-
 
 //state LEDs connections
 #define blueLED 5             //blue LED for displaying states
 #define grnLED 6              //green LED for displaying states
 #define ylwLED 7              //yellow LED for displaying states
-//define stepper motor constants
-#define enableLED 13 //stepper enabled LED
-#define stepperEnTrue false //variable for enabling stepper motor
-#define stepperEnFalse true //variable for disabling stepper motor
-#define test_led 13 //test led to test interrupt heartbeat
+#define enableLED 13          //stepper enabled LED
+
+//define motor pin numbers
+#define stepperEnable 48      //stepper enable pin on stepStick 
+#define rtStepPin 50          //right stepper motor step pin 
+#define rtDirPin 51           // right stepper motor direction pin 
+#define ltStepPin 52          //left stepper motor step pin 
+#define ltDirPin 53           //left stepper motor direction pin 
+
+AccelStepper stepperRight(AccelStepper::DRIVER, rtStepPin, rtDirPin); //create instance of right stepper motor object
+// (2 driver pins, low to high transition step pin 52, direction input pin 53 (high means forward)
+AccelStepper stepperLeft(AccelStepper::DRIVER, ltStepPin, ltDirPin); //create instance of left stepper motor object
+// (2 driver pins, step pin 50, direction input pin 51)
+MultiStepper steppers; //create instance to control multiple steppers at the same time
+
+#define stepperEnTrue false   //variable for enabling stepper motor
+#define stepperEnFalse true   //variable for disabling stepper motor
 
 #define robot_spd 1500 //set robot speed
 #define max_accel 10000//maximum robot acceleration
 #define max_spd 2500//maximum robot speed
 
-#define quarter_rotation 200  //stepper quarter rotation
-#define half_rotation 400     //stepper half rotation
-#define one_rotation  800     //stepper motor runs in 1/4 steps so 800 steps is one full rotation
-#define two_rotation  1600    //stepper motor 2 rotations
-#define three_rotation 2400   //stepper rotation 3 rotations
-#define four_rotation 3200    //stepper rotation 3 rotations
-#define five_rotation 4000    //stepper rotation 3 rotations
+const unsigned short PAUSE_TIME = 3000;         //time before robot moves
+const float FULL_REV = 800.0;                   //A4988 Stepper Motor Driver quarter step ticks for full revolution of wheel
 
+//define encoder pins
+#define LEFT 0                            //left encoder
+#define RIGHT 1                           //right encoder
+#define ltEncoder 18                      //left encoder pin (Mega Interrupt pins 2,3 18,19,20,21)
+#define rtEncoder 19                      //right encoder pin (Mega Interrupt pins 2,3 18,19,20,21)
+volatile long int encoder[2] = {0, 0};    //interrupt variable to hold number of encoder counts (left, right)
+long int lastSpeed[2] = {0, 0};           //variable to hold encoder speed (left, right)
+long int accumTicks[2] = {0, 0};          //variable to hold accumulated ticks since last reset
+
+//Robot Constants
+const float WIDTH_BOT = 23.3; //cm
+const float RADIUS_BOT = 11.7; //cm
+const float CM_TO_STEPS = 29.95;//25.6; 
+const float TICKS_TO_STEPS = 20.0;
+const float STEPS_TO_TICKS = 1.0/20.0;
+
+//IMU object
+Adafruit_MPU6050 IMU;
+
+//Bluetooth module connections
+#define BTTX 10               // TX on chip to pin 10 on Arduino Mega
+#define BTRX 11               // RX on chip to pin 11 on Arduino Mega
+SoftwareSerial BTSerial(BTTX, BTRX);
+
+//*****************************
+// Lab 2 Definitions
+//*****************************
 //define IR sensor connections
 #define irFront A0 //front IR analog pin
 #define irRear  A1//back IR analog pin
 #define irRight A2 //right IR analog pin
 #define irLeft  A3 //left IR analog pin
 #define button A15 //pushbutton
-
-//define sonar connections
-#define snrLeft 8  //front left sonar 
-#define snrRight 9 //front right sonar 
-long SNRDist;
-long SNLDist;
-
-NewPing SNL(snrLeft, snrLeft);    //create an instance of the left sonar
-NewPing SNR(snrRight, snrRight);  //create an instance of the right sonar
 
 #define irThresh    5 //in inches // The IR threshold for presence of an obstacle - 400 raw value
 #define snrThresh   5   // The sonar threshold for presence of an obstacle
@@ -112,6 +127,15 @@ int irRearAvg;   //variable to hold average of current rear IR reading
 int irRightAvg;   //variable to hold average of current right IR reading
 int irIdx = 0;//index for 5 IR readings to take the average
 
+//define sonar connections
+#define snrLeft 8  //front left sonar 
+#define snrRight 9 //front right sonar 
+long SNRDist;
+long SNLDist;
+
+NewPing SNL(snrLeft, snrLeft);    //create an instance of the left sonar
+NewPing SNR(snrRight, snrRight);  //create an instance of the right sonar
+
 int srLeftArray[5] = {0, 0, 0, 0, 0}; //array to hold 5 left sonar readings
 int srRightArray[5] = {0, 0, 0, 0, 0}; //array to hold 5 right sonar readings
 int srIdx = 0;//index for 5 sonar readings to take the average
@@ -120,10 +144,12 @@ int srRight;  //variable to hold average or right sonar current reading
 int srLeftAvg;  //variable to holde left sonar data
 int srRightAvg; //variable to hold right sonar data
 
+// State Machine LED
 volatile boolean test_state; //variable to hold test led state for timer interrupt
 
 int obsIR[4] = {0, 0, 0, 0};
 int obsSonar[2] = {0, 0};
+
 //flag byte to hold sensor data
 volatile byte flag = 0;    // Flag to hold IR & Sonar data - used to create the state machine
 
@@ -157,22 +183,6 @@ byte layers = 2; //[wander runAway collide]
 
 #define timer_int 250000 // 1/2 second (500000 us) period for timer interrupt
 
-//define encoder pins
-#define LEFT 0                            //left encoder
-#define RIGHT 1                           //right encoder
-#define ltEncoder 18                      //left encoder pin (Mega Interrupt pins 2,3 18,19,20,21)
-#define rtEncoder 19                      //right encoder pin (Mega Interrupt pins 2,3 18,19,20,21)
-volatile long int encoder[2] = {0, 0};    //interrupt variable to hold number of encoder counts (left, right)
-long int lastSpeed[2] = {0, 0};           //variable to hold encoder speed (left, right)
-long int accumTicks[2] = {0, 0};          //variable to hold accumulated ticks since last reset
-
-//Robot Constants
-const float WIDTH_BOT = 23.3; //cm
-const float RADIUS_BOT = 11.7; //cm
-const float CM_TO_STEPS = 29.95;//25.6; 
-const float TICKS_TO_STEPS = 20.0;
-const float STEPS_TO_TICKS = 1.0/20.0;
-
 //Random Wander movement list
 /**
  * 0 - Stop
@@ -198,7 +208,125 @@ float leftSonarToInches(float pulse) {
 
 float rightSonarToInches(float pulse) {
   return 0.0067*pulse - 0.3554;
+}
 
+//****************************************************************
+// Initialization Functions
+/**
+ * Function to initialize Bluetooth
+ */
+void init_BT(){
+  Serial.println("Goodnight moon!");
+  BTSerial.println("Hello, world?");
+}
+
+/**
+ * Function to initialize IMU
+ */
+void init_IMU(){
+  Serial.println("Adafruit MPU6050 init!");
+
+  // Try to initialize!
+  if (!IMU.begin()) {
+    Serial.println("Failed to find MPU6050 chip");
+    while (1) {
+      delay(10);
+    }
+  }
+  Serial.println("MPU6050 Found!");
+
+  IMU.setAccelerometerRange(MPU6050_RANGE_8_G);
+  Serial.print("Accelerometer range set to: ");
+  switch (IMU.getAccelerometerRange()) {
+  case MPU6050_RANGE_2_G:
+    Serial.println("+-2G");
+    break;
+  case MPU6050_RANGE_4_G:
+    Serial.println("+-4G");
+    break;
+  case MPU6050_RANGE_8_G:
+    Serial.println("+-8G");
+    break;
+  case MPU6050_RANGE_16_G:
+    Serial.println("+-16G");
+    break;
+  }
+  IMU.setGyroRange(MPU6050_RANGE_500_DEG);
+  Serial.print("Gyro range set to: ");
+  switch (IMU.getGyroRange()) {
+  case MPU6050_RANGE_250_DEG:
+    Serial.println("+- 250 deg/s");
+    break;
+  case MPU6050_RANGE_500_DEG:
+    Serial.println("+- 500 deg/s");
+    break;
+  case MPU6050_RANGE_1000_DEG:
+    Serial.println("+- 1000 deg/s");
+    break;
+  case MPU6050_RANGE_2000_DEG:
+    Serial.println("+- 2000 deg/s");
+    break;
+  }
+
+  IMU.setFilterBandwidth(MPU6050_BAND_21_HZ);
+  Serial.print("Filter bandwidth set to: ");
+  switch (IMU.getFilterBandwidth()) {
+  case MPU6050_BAND_260_HZ:
+    Serial.println("260 Hz");
+    break;
+  case MPU6050_BAND_184_HZ:
+    Serial.println("184 Hz");
+    break;
+  case MPU6050_BAND_94_HZ:
+    Serial.println("94 Hz");
+    break;
+  case MPU6050_BAND_44_HZ:
+    Serial.println("44 Hz");
+    break;
+  case MPU6050_BAND_21_HZ:
+    Serial.println("21 Hz");
+    break;
+  case MPU6050_BAND_10_HZ:
+    Serial.println("10 Hz");
+    break;
+  case MPU6050_BAND_5_HZ:
+    Serial.println("5 Hz");
+    break;
+  }
+}
+
+/**
+ * Function to set all stepper motor variables, outputs and LEDs
+ */
+void init_stepper(){
+  pinMode(rtStepPin, OUTPUT); //sets pin as output
+  pinMode(rtDirPin, OUTPUT); //sets pin as output
+  pinMode(ltStepPin, OUTPUT); //sets pin as output
+  pinMode(ltDirPin, OUTPUT); //sets pin as output
+  pinMode(stepperEnable, OUTPUT); //sets pin as output
+  digitalWrite(stepperEnable, stepperEnFalse); //turns off the stepper motor driver
+  pinMode(enableLED, OUTPUT); //set enable LED as output
+  digitalWrite(enableLED, LOW); //turn off enable LED
+  pinMode(blueLED, OUTPUT); //set red LED as output
+  pinMode(grnLED, OUTPUT); //set green LED as output
+  pinMode(ylwLED, OUTPUT); //set yellow LED as output
+  digitalWrite(blueLED, HIGH); //turn on red LED
+  digitalWrite(ylwLED, HIGH); //turn on yellow LED
+  digitalWrite(grnLED, HIGH); //turn on green LED
+  delay(PAUSE_TIME / 5); //wait 0.5 seconds
+  digitalWrite(blueLED, LOW); //turn off red LED
+  digitalWrite(ylwLED, LOW); //turn off yellow LED
+  digitalWrite(grnLED, LOW); //turn off green LED
+
+  stepperRight.setMaxSpeed(max_spd);//set the maximum permitted speed limited by processor and clock speed, no greater than 4000 steps/sec on Arduino
+  stepperRight.setAcceleration(max_accel);//set desired acceleration in steps/s^2
+  stepperLeft.setMaxSpeed(max_spd);//set the maximum permitted speed limited by processor and clock speed, no greater than 4000 steps/sec on Arduino
+  stepperLeft.setAcceleration(max_accel);//set desired acceleration in steps/s^2
+
+  steppers.addStepper(stepperRight); //add right motor to MultiStepper
+  steppers.addStepper(stepperLeft); //add left motor to MultiStepper
+  digitalWrite(stepperEnable, stepperEnTrue); //turns on the stepper motor driver
+  digitalWrite(enableLED, HIGH); //turn on enable LED
 }
 
 // Helper Functions
@@ -218,6 +346,93 @@ void RwheelSpeed()
   encoder[RIGHT] ++; //count the right wheel encoder interrupts
 }
 
+/**
+ * Function prints encoder data to serial monitor
+ */
+void print_encoder_data() {
+  static unsigned long timer = 0;                           //print manager timer
+  if (millis() - timer > 100) {                             //print encoder data every 100 ms or so
+    lastSpeed[LEFT] = encoder[LEFT];                        //record the latest left speed value
+    lastSpeed[RIGHT] = encoder[RIGHT];                      //record the latest right speed value
+    accumTicks[LEFT] = accumTicks[LEFT] + encoder[LEFT];    //record accumulated left ticks
+    accumTicks[RIGHT] = accumTicks[RIGHT] + encoder[RIGHT]; //record accumulated right ticks
+    Serial.println("Encoder value:");
+    Serial.print("\tLeft:\t");
+    Serial.print(encoder[LEFT]);
+    Serial.print("\tRight:\t");
+    Serial.println(encoder[RIGHT]);
+    Serial.println("Accumulated Ticks: ");
+    Serial.print("\tLeft:\t");
+    Serial.print(accumTicks[LEFT]);
+    Serial.print("\tRight:\t");
+    Serial.println(accumTicks[RIGHT]);
+    encoder[LEFT] = 0;                          //clear the left encoder data buffer
+    encoder[RIGHT] = 0;                         //clear the right encoder data buffer
+    timer = millis();                           //record current time since program started
+  }
+}
+
+/**
+ * Function to print IMU data to the serial monitor
+ */
+void print_IMU_data(){
+    /* Get new sensor events with the readings */
+  sensors_event_t a, g, temp;
+  IMU.getEvent(&a, &g, &temp);
+
+  /* Print out the values */
+  Serial.print("Acceleration X: ");
+  Serial.print(a.acceleration.x);
+  Serial.print(", Y: ");
+  Serial.print(a.acceleration.y);
+  Serial.print(", Z: ");
+  Serial.print(a.acceleration.z);
+  Serial.println(" m/s^2");
+
+  Serial.print("Rotation X: ");
+  Serial.print(g.gyro.x);
+  Serial.print(", Y: ");
+  Serial.print(g.gyro.y);
+  Serial.print(", Z: ");
+  Serial.print(g.gyro.z);
+  Serial.println(" rad/s");
+
+  Serial.print("Temperature: ");
+  Serial.print(temp.temperature);
+  Serial.println(" degC");
+
+  Serial.println("");
+}
+
+/**
+ * Function to send and receive data with the Bluetooth
+ */
+void Bluetooth_comm(){
+  String data="";
+  if (Serial.available()) {
+     while (Serial.available()){
+      char nextChar = Serial.read();
+      data = data + String(nextChar); 
+      if (nextChar == ';') {
+        break;
+      }
+     }
+    Serial.println(data);
+    BTSerial.println(data);
+  }
+  
+  if (BTSerial.available()) {
+    while (BTSerial.available()){
+      char nextChar = BTSerial.read();
+      data = data + String(nextChar); 
+      if (nextChar == ';') {
+        break;
+      }
+    }
+    Serial.println(data);
+    BTSerial.println(data);
+  }
+}
 
 /**
  * Function to set both wheel speeds
@@ -261,6 +476,252 @@ void runAtSpeed ( void ) {
    This is a sample updateIR() function, the description and code should be updated to take an average, consider all sensor and reflect
    the necesary changes for the lab requirements.
 */
+
+void stop() {
+  stepperRight.stop();
+  stepperLeft.stop();
+}
+
+/*This function, runToStop(), will run the robot until the target is achieved and
+   then stop it
+*/
+void runToStop ( void ) {
+  int runNow = 1;
+  while (runNow) {
+    if (!stepperRight.run() ) {
+      runNow = 0;
+      stop();
+    }
+    if (!stepperLeft.run()) {
+      runNow = 0;
+      stop();
+    }
+  }
+}
+
+/**
+ * This function pivots the robot in one direction 90 degrees.
+ * The robot has one wheel not moving while the other wheel moves to pivot.
+ * 
+ * @param direction A positive value to pivot clockwise or a negative value to pivot counterclockwise
+ */
+void pivot(int direction) {
+  stepperRight.setCurrentPosition(0);
+  stepperLeft.setCurrentPosition(0);
+  if (direction > 0) {
+    stepperRight.moveTo(1000);
+    stepperRight.setMaxSpeed(500); //set right motor speed
+    stepperRight.runSpeedToPosition(); //move right motor
+  } else {
+    stepperLeft.moveTo(1000);
+    stepperLeft.setMaxSpeed(500); //set left motor speed
+    stepperLeft.runSpeedToPosition(); //move left motor
+  }
+  runToStop(); //run until the robot reaches the target
+}
+
+/**
+ * This function turns the robot forward a quarter circle with a given radius in one direction.
+ * 
+ * @param radius A turning radius in centimeters. A radius of 0 spins the robot in the clockwise direction 90 degrees (similar to calling spin() a quarter circle).
+ * @param turnDirection An array of direction values
+ *                        position 0: a forward [0] or reverse [1] turn
+ *                        position 1: a left [0] or right [1] turn
+ */
+void turn(float radius, bool turnDirection[2]) {
+  /*
+    seems to me that once a radius is given, the robot doesn't make the exact radius turn.
+    Steps I took:
+      1. I input a 15cm CW turn
+      2. Measure 15cm out from the center of the wheel
+      3. Start the robot, call the turn function, and stop the robot
+      5. Attempt to measure 15cm out from the center of the wheel
+      6. The robot is off by exactly 1.5cm
+      7. The robot is also crooked and isn't completing the turn properly
+    
+    Possible Solutions:
+      1. A proportional gain must be placed to counter the error
+      2. Count how many ticks are required for the robot to move forward and then turn
+      3. Have outer turn proportionally less than inner
+  */
+
+  setBothStepperCurrentPosition(0, 0); //reset stepper positions
+  setBothStepperSpeed(400, 400); //set motor speeds
+
+  //float diam = 60.0*radius/18; //60 steps per 18cm
+  float inner = 2.0 * 3.14 * (radius*1.2 - WIDTH_BOT/2.0) * (90.0/360.0) *0.95;
+  float outer = 2.0 * 3.14 * (radius*1.2 + WIDTH_BOT/2.0) * (90.0/360.0) *0.95;
+
+  int innerSteps = inner * 29.958;
+  int outerSteps = outer * 29.958;
+
+  long positions[2]; // Array of desired stepper positions
+  
+  // Check the turn direction (left or right, and forward or backward)
+  if (turnDirection[0] == 0 && turnDirection[1] == 0) {
+    positions[0] = outerSteps; //right motor absolute position
+    positions[1] = innerSteps; //left motor absolute position
+    steppers.moveTo(positions);
+  }
+  else if (turnDirection[0] == 0 && turnDirection[1] == 1) {
+    positions[0] = innerSteps; //right motor absolute position
+    positions[1] = outerSteps; //left motor absolute position
+    steppers.moveTo(positions);
+  }
+  else if (turnDirection[0] == 1 && turnDirection[1] == 0) {
+    positions[0] = -outerSteps; //right motor absolute position
+    positions[1] = -innerSteps; //left motor absolute position
+    steppers.moveTo(positions);
+  }
+  else {
+    positions[0] = -innerSteps; //right motor absolute position
+    positions[1] = -outerSteps; //left motor absolute position
+    steppers.moveTo(positions);
+  }
+
+  steppers.runSpeedToPosition(); // Blocks until all are in position
+}
+
+void forward(int rot) {
+  long positions[2]; // Array of desired stepper positions
+  stepperRight.setCurrentPosition(0);
+  stepperLeft.setCurrentPosition(0);
+  positions[0] = stepperRight.currentPosition() + rot;  //right motor absolute position
+  positions[1] = stepperLeft.currentPosition() + rot;   //left motor absolute position
+  stepperRight.move(positions[0]);  //move right motor to position
+  stepperLeft.move(positions[1]);   //move left motor to position
+  runToStop();//run until the robot reaches the target
+}
+
+/**
+ * Moves robot forward a distance based on the distance input.
+ * 
+ * @param distance A value in centimeters
+*/
+void forwardDist(int distance) {
+  encoder[LEFT] = 0;
+  encoder[RIGHT] = 0;
+
+  float steps = distance * CM_TO_STEPS;
+  float ticks = steps * STEPS_TO_TICKS;
+  
+  stepperRight.moveTo(steps); //move one full rotation forward relative to current position
+  stepperLeft.moveTo(steps); //move one full rotation forward relative to current position
+  setBothStepperSpeed(500, 500); //set stepper speeds
+  stepperRight.runSpeedToPosition(); //move right motor
+  stepperLeft.runSpeedToPosition(); //move left motor
+
+  runToStop(); //run until the robot reaches the target
+/*
+  int errorLeft = ticks - encoder[LEFT];
+  int errorRight = ticks - encoder[RIGHT];
+
+  int correction = TICKS_TO_STEPS * max(errorLeft, errorRight);
+  setBothStepperCurrentPosition(0, 0); //reset stepper positions
+  stepperRight.moveTo(correction); //move one full rotation forward relative to current position
+  stepperLeft.moveTo(correction); //move one full rotation forward relative to current position
+  setBothStepperSpeed(250, 250); //set stepper speeds
+  stepperRight.runSpeedToPosition(); //move right motor
+  stepperLeft.runSpeedToPosition(); //move left motor
+  runToStop();
+  */
+}
+
+/**
+ * Moves robot backward a distance based on the distance input.
+ * 
+ * @param distance A value in centimeters
+*/
+void reverse(int distance) {
+  float steps = distance * 29.9586;
+  Serial.print(steps);
+  stepperRight.moveTo(-steps); //move one full rotation forward relative to current position
+  stepperLeft.moveTo(-steps); //move one full rotation forward relative to current position
+  stepperRight.setMaxSpeed(500); //set right motor speed
+  stepperLeft.setMaxSpeed(500); //set left motor speed
+  stepperRight.runSpeedToPosition(); //move right motor
+  stepperLeft.runSpeedToPosition(); //move left motor
+  runToStop(); //run until the robot reaches the target
+}
+
+/**
+ Calculates arc length needed to turn to angle and calls multistepper to turn robot
+ After turning, encoders are used to error check and move robot again if it moved too much or too little
+*/
+void goToAngle(float angle) {
+  stepperRight.setCurrentPosition(0);
+  stepperLeft.setCurrentPosition(0);
+  encoder[LEFT] = 0;
+  encoder[RIGHT] = 0;
+  digitalWrite(blueLED, LOW); //turn off red LED
+  digitalWrite(grnLED, HIGH); //turn on green LED
+  digitalWrite(ylwLED, LOW); //turn off yellow LED
+  float arclength = 2.0 * PI * RADIUS_BOT * (angle/360.0) * 0.89;
+  int steps = arclength * CM_TO_STEPS;
+  int ticks = steps * STEPS_TO_TICKS;
+  ticks = abs(ticks);
+
+  stepperRight.moveTo(steps);
+  stepperLeft.moveTo(-steps);
+  /*
+  Serial.print("Steps: ");
+  Serial.println(steps);
+  Serial.print("Ticks: ");
+  Serial.println(ticks);
+  */
+
+  setBothStepperSpeed(400, 400); //set motor speeds
+  stepperRight.runSpeedToPosition(); //move right motor
+  stepperLeft.runSpeedToPosition(); //move left motorw
+  runToStop();
+  
+  /*
+  Serial.print("Left Encoder: ");
+  Serial.println(encoder[LEFT]);
+  Serial.println("Right Endoder: ");
+  Serial.println(encoder[RIGHT]);
+  int errorLeft = ticks - encoder[LEFT];
+  int errorRight = ticks - encoder[RIGHT];
+  Serial.print("Error Left: ");
+  Serial.println(errorLeft);
+  Serial.print("Error Right: ");
+  Serial.println(errorRight);
+
+  int correctStepsLeft = errorLeft * TICKS_TO_STEPS;
+  int correctStepsRight = errorRight * TICKS_TO_STEPS;
+
+  setBothStepperCurrentPosition(0, 0); //reset stepper positions
+  Serial.print("Correction steps: ");
+  Serial.println(correctStepsLeft);
+  stepperRight.moveTo(-correctStepsRight);
+  stepperLeft.moveTo(correctStepsLeft);
+  stepperRight.runSpeedToPosition(); //move right motor
+  stepperLeft.runSpeedToPosition(); //move left motor
+
+  runToStop(); //run until the robot reaches the target
+  */
+}
+
+/**
+ Give the robot x y coordiantes in cm 
+ Robot will then call goToAngle and spin to a direction that points to the coordiante
+ Will then go calcualted distance to reach coordinate
+*/
+void goToGoal(float x, float y) {
+  digitalWrite(blueLED, LOW); //turn off red LED
+  digitalWrite(grnLED, HIGH); //turn on green LED
+  digitalWrite(ylwLED, HIGH); //turn on yellow LED
+
+  double radians = atan2(y, x); //returns angle to x, y in radians
+  
+  float angle = (radians * 180.0/PI);
+  //Serial.print("Degrees: ");
+  //Serial.println(angle);
+  goToAngle(angle);
+  float distance = sqrt((x*x) + (y*y));
+
+  forwardDist(distance);
+}
 
 void updateIR() {
   int front = 0, back = 0, left = 0, right = 0;
@@ -414,223 +875,13 @@ void updateSensors() {
   //test_state = !test_state;//LED to test the heartbeat of the timer interrupt routine
   //digitalWrite(enableLED, test_state);  // Toggles the LED to let you know the timer is working
   test_state = !test_state;
-  digitalWrite(test_led, test_state);
+  digitalWrite(enableLED, test_state);
   flag = 0;       //clear all sensor flags
   state = 0;      //clear all state flags
   updateIR();     //update IR readings and update flag variable and state machine
   updateSonar();  //update Sonar readings and update flag variable and state machine
   updateState();  //update State Machine based upon sensor readings
   delay(1000);     //added so that you can read the data on the serial monitor
-}
-
-void stop() {
-  stepperRight.stop();
-  stepperLeft.stop();
-}
-
-
-/*This function, runToStop(), will run the robot until the target is achieved and
-   then stop it
-*/
-void runToStop ( void ) {
-  int runNow = 1;
-  while (runNow) {
-    if (!stepperRight.run() ) {
-      runNow = 0;
-      stop();
-    }
-    if (!stepperLeft.run()) {
-      runNow = 0;
-      stop();
-    }
-  }
-}
-
-void forward(int rot) {
-  long positions[2]; // Array of desired stepper positions
-  stepperRight.setCurrentPosition(0);
-  stepperLeft.setCurrentPosition(0);
-  positions[0] = stepperRight.currentPosition() + rot;  //right motor absolute position
-  positions[1] = stepperLeft.currentPosition() + rot;   //left motor absolute position
-  stepperRight.move(positions[0]);  //move right motor to position
-  stepperLeft.move(positions[1]);   //move left motor to position
-  runToStop();//run until the robot reaches the target
-}
-
-/**
- * Moves robot forward a distance based on the distance input.
- * 
- * @param distance A value in centimeters
-*/
-void forwardDist(int distance) {
-  encoder[LEFT] = 0;
-  encoder[RIGHT] = 0;
-
-  float steps = distance * CM_TO_STEPS;
-  float ticks = steps * STEPS_TO_TICKS;
-  
-  stepperRight.moveTo(steps); //move one full rotation forward relative to current position
-  stepperLeft.moveTo(steps); //move one full rotation forward relative to current position
-  setBothStepperSpeed(500, 500); //set stepper speeds
-  stepperRight.runSpeedToPosition(); //move right motor
-  stepperLeft.runSpeedToPosition(); //move left motor
-
-  runToStop(); //run until the robot reaches the target
-/*
-  int errorLeft = ticks - encoder[LEFT];
-  int errorRight = ticks - encoder[RIGHT];
-
-  int correction = TICKS_TO_STEPS * max(errorLeft, errorRight);
-  setBothStepperCurrentPosition(0, 0); //reset stepper positions
-  stepperRight.moveTo(correction); //move one full rotation forward relative to current position
-  stepperLeft.moveTo(correction); //move one full rotation forward relative to current position
-  setBothStepperSpeed(250, 250); //set stepper speeds
-  stepperRight.runSpeedToPosition(); //move right motor
-  stepperLeft.runSpeedToPosition(); //move left motor
-  runToStop();
-  */
-}
-
-/**
- * This function turns the robot forward a quarter circle with a given radius in one direction.
- * 
- * @param radius A turning radius in centimeters. A radius of 0 spins the robot in the clockwise direction 90 degrees (similar to calling spin() a quarter circle).
- * @param turnDirection An array of direction values
- *                        position 0: a forward [0] or reverse [1] turn
- *                        position 1: a left [0] or right [1] turn
- */
-void turn(float radius, bool turnDirection[2]) {
-  /*
-    seems to me that once a radius is given, the robot doesn't make the exact radius turn.
-    Steps I took:
-      1. I input a 15cm CW turn
-      2. Measure 15cm out from the center of the wheel
-      3. Start the robot, call the turn function, and stop the robot
-      5. Attempt to measure 15cm out from the center of the wheel
-      6. The robot is off by exactly 1.5cm
-      7. The robot is also crooked and isn't completing the turn properly
-    
-    Possible Solutions:
-      1. A proportional gain must be placed to counter the error
-      2. Count how many ticks are required for the robot to move forward and then turn
-      3. Have outer turn proportionally less than inner
-  */
-
-  setBothStepperCurrentPosition(0, 0); //reset stepper positions
-  setBothStepperSpeed(400, 400); //set motor speeds
-
-  //float diam = 60.0*radius/18; //60 steps per 18cm
-  float inner = 2.0 * 3.14 * (radius*1.2 - WIDTH_BOT/2.0) * (90.0/360.0) *0.95;
-  float outer = 2.0 * 3.14 * (radius*1.2 + WIDTH_BOT/2.0) * (90.0/360.0) *0.95;
-
-  int innerSteps = inner * 29.958;
-  int outerSteps = outer * 29.958;
-
-  long positions[2]; // Array of desired stepper positions
-  
-  // Check the turn direction (left or right, and forward or backward)
-  if (turnDirection[0] == 0 && turnDirection[1] == 0) {
-    positions[0] = outerSteps; //right motor absolute position
-    positions[1] = innerSteps; //left motor absolute position
-    steppers.moveTo(positions);
-  }
-  else if (turnDirection[0] == 0 && turnDirection[1] == 1) {
-    positions[0] = innerSteps; //right motor absolute position
-    positions[1] = outerSteps; //left motor absolute position
-    steppers.moveTo(positions);
-  }
-  else if (turnDirection[0] == 1 && turnDirection[1] == 0) {
-    positions[0] = -outerSteps; //right motor absolute position
-    positions[1] = -innerSteps; //left motor absolute position
-    steppers.moveTo(positions);
-  }
-  else {
-    positions[0] = -innerSteps; //right motor absolute position
-    positions[1] = -outerSteps; //left motor absolute position
-    steppers.moveTo(positions);
-  }
-
-  steppers.runSpeedToPosition(); // Blocks until all are in position
-}
-
-/**
- Calculates arc length needed to turn to angle and calls multistepper to turn robot
- After turning, encoders are used to error check and move robot again if it moved too much or too little
-*/
-void goToAngle(float angle) {
-  stepperRight.setCurrentPosition(0);
-  stepperLeft.setCurrentPosition(0);
-  encoder[LEFT] = 0;
-  encoder[RIGHT] = 0;
-  digitalWrite(blueLED, LOW); //turn off red LED
-  digitalWrite(grnLED, HIGH); //turn on green LED
-  digitalWrite(ylwLED, LOW); //turn off yellow LED
-  float arclength = 2.0 * PI * RADIUS_BOT * (angle/360.0) * 0.89;
-  int steps = arclength * CM_TO_STEPS;
-  int ticks = steps * STEPS_TO_TICKS;
-  ticks = abs(ticks);
-
-  stepperRight.moveTo(steps);
-  stepperLeft.moveTo(-steps);
-  /*
-  Serial.print("Steps: ");
-  Serial.println(steps);
-  Serial.print("Ticks: ");
-  Serial.println(ticks);
-  */
-
-  setBothStepperSpeed(400, 400); //set motor speeds
-  stepperRight.runSpeedToPosition(); //move right motor
-  stepperLeft.runSpeedToPosition(); //move left motorw
-  runToStop();
-  
-  /*
-  Serial.print("Left Encoder: ");
-  Serial.println(encoder[LEFT]);
-  Serial.println("Right Endoder: ");
-  Serial.println(encoder[RIGHT]);
-  int errorLeft = ticks - encoder[LEFT];
-  int errorRight = ticks - encoder[RIGHT];
-  Serial.print("Error Left: ");
-  Serial.println(errorLeft);
-  Serial.print("Error Right: ");
-  Serial.println(errorRight);
-
-  int correctStepsLeft = errorLeft * TICKS_TO_STEPS;
-  int correctStepsRight = errorRight * TICKS_TO_STEPS;
-
-  setBothStepperCurrentPosition(0, 0); //reset stepper positions
-  Serial.print("Correction steps: ");
-  Serial.println(correctStepsLeft);
-  stepperRight.moveTo(-correctStepsRight);
-  stepperLeft.moveTo(correctStepsLeft);
-  stepperRight.runSpeedToPosition(); //move right motor
-  stepperLeft.runSpeedToPosition(); //move left motor
-
-  runToStop(); //run until the robot reaches the target
-  */
-}
-
-/**
- Give the robot x y coordiantes in cm 
- Robot will then call goToAngle and spin to a direction that points to the coordiante
- Will then go calcualted distance to reach coordinate
-*/
-void goToGoal(float x, float y) {
-  digitalWrite(blueLED, LOW); //turn off red LED
-  digitalWrite(grnLED, HIGH); //turn on green LED
-  digitalWrite(ylwLED, HIGH); //turn on yellow LED
-
-  double radians = atan2(y, x); //returns angle to x, y in radians
-  
-  float angle = (radians * 180.0/PI);
-  //Serial.print("Degrees: ");
-  //Serial.println(angle);
-  goToAngle(angle);
-  float distance = sqrt((x*x) + (y*y));
-
-  forwardDist(distance); 
-
 }
 
 /*
@@ -709,7 +960,7 @@ void robotMotion() {
   } 
   else{
     //Serial.println("robot forward");
-    //forward(one_rotation);//move forward as long as all sensors are clear
+    //forward(FULL_REV);//move forward as long as all sensors are clear
   }
 }
 
@@ -757,34 +1008,13 @@ void randWander() {
 }
 
 void setup()
-{
-  //stepper Motor set up
-  pinMode(rtStepPin, OUTPUT);//sets pin as output
-  pinMode(rtDirPin, OUTPUT);//sets pin as output
-  pinMode(ltStepPin, OUTPUT);//sets pin as output
-  pinMode(ltDirPin, OUTPUT);//sets pin as output
-  pinMode(stepperEnable, OUTPUT);//sets pin as output
-  digitalWrite(stepperEnable, stepperEnFalse);//turns off the stepper motor driver
-  pinMode(enableLED, OUTPUT);//set LED as output
-  digitalWrite(enableLED, LOW);//turn off enable LED
-  stepperRight.setMaxSpeed(max_spd);//set the maximum permitted speed limited by processor and clock speed, no greater than 4000 steps/sec on Arduino
-  stepperRight.setAcceleration(max_accel);//set desired acceleration in steps/s^2
-  stepperLeft.setMaxSpeed(max_spd);//set the maximum permitted speed limited by processor and clock speed, no greater than 4000 steps/sec on Arduino
-  stepperLeft.setAcceleration(max_accel);//set desired acceleration in steps/s^2
-
-  stepperRight.setSpeed(robot_spd);//set right motor speed
-  stepperLeft.setSpeed(robot_spd);//set left motor speed
-
-  steppers.addStepper(stepperRight);//add right motor to MultiStepper
-  steppers.addStepper(stepperLeft);//add left motor to MultiStepper
-  digitalWrite(stepperEnable, stepperEnTrue);//turns on the stepper motor driver
-  digitalWrite(enableLED, HIGH);//turn on enable LED
+{  
   //Timer Interrupt Set Up
   Timer1.initialize(timer_int);         // initialize timer1, and set a period in microseconds
   Timer1.attachInterrupt(updateSensors);  // attaches updateSensors() as a timer overflow interrupt
 
   Serial.begin(baud_rate);//start serial communication in order to debug the software while coding
-  delay(3000);//wait 3 seconds before robot moves
+  delay(PAUSE_TIME);//wait 3 seconds before robot moves
 
   aggressive = false;
 }

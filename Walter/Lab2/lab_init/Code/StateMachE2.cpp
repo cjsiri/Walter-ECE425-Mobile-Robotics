@@ -6,6 +6,7 @@
 //You can use this template to design a state machine or create your own using IF CONDITIONS or SWITCH-CASE STATEMENTS
 //This state machine will flash an LED, spin a motor, play a buzzer and move a servo
 
+#include <Arduino.h>          //include for PlatformIO IDE
 #include <Servo.h>    // servo library
 Servo SongServo;      //define a servo object
 

@@ -116,7 +116,6 @@ MultiStepper steppers; //create instance to control multiple steppers at the sam
 #define stepperEnTrue false   //variable for enabling stepper motor
 #define stepperEnFalse true   //variable for disabling stepper motor
 
-
 const unsigned short PAUSE_TIME = 2500;         //time before robot moves
 const unsigned short STEP_TIME = 500;           //delay time between high and low on step pin
 const unsigned short WAIT_TIME = 15000;         //delay for printing data
@@ -404,6 +403,14 @@ void runAtSpeedToPosition() {
 void runAtSpeed ( void ) {
   while (stepperRight.runSpeed() || stepperLeft.runSpeed()) {
   }
+}
+
+/**
+ * Stops both stepper motors
+*/
+void stop() {
+  stepperRight.stop();
+  stepperLeft.stop();
 }
 
 /**
@@ -714,14 +721,6 @@ void reverse(int distance) {
   stepperRight.runSpeedToPosition(); //move right motor
   stepperLeft.runSpeedToPosition(); //move left motor
   runToStop(); //run until the robot reaches the target
-}
-
-/**
- * Stops both stepper motors
-*/
-void stop() {
-  stepperRight.stop();
-  stepperLeft.stop();
 }
 
 /**

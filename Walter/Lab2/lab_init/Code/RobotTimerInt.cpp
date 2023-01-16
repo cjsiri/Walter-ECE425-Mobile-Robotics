@@ -36,6 +36,7 @@
   Pushbutton  A15
 */
 
+#include <Arduino.h>          //include for PlatformIO IDE
 #include <AccelStepper.h>//include the stepper motor library
 #include <MultiStepper.h>//include multiple stepper motor library
 #include <NewPing.h> //include sonar library

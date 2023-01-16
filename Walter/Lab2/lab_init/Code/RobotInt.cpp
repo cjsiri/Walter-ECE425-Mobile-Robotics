@@ -48,7 +48,8 @@
   Pushbutton  A15
 */
 
-#include <PinChangeInt.h>//include pin change interrupt library
+#include <Arduino.h>          //include for PlatformIO IDE
+#include <EnableInterrupt.h>//include pin change interrupt library
 #include <AccelStepper.h>//include the stepper motor library
 #include <MultiStepper.h>//include multiple stepper motor library
 
@@ -104,11 +105,6 @@ volatile uint8_t stopCount = 0; // counter on how long the robot has been stoppe
 unsigned long left, right; //holds left and right sonar data
 
 //obsRoutine.ino Interrupt Service Routine for falling edge of echo
-
-void stop() {
-  stepperRight.stop();
-  stepperLeft.stop();
-}
 
 void obsRoutine() {
   //  print sonar data
@@ -178,7 +174,10 @@ void turnRight(int rot) {
   steppers.runSpeedToPosition(); // Blocks until all are in position
 }
 
-
+void stop() {
+  stepperRight.stop();
+  stepperLeft.stop();
+}
 
 /*
   This is a sample updateSonar() function, the description and code should be updated to take an average, consider all sensors and reflect

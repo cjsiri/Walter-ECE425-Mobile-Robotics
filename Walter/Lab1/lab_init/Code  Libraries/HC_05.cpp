@@ -13,6 +13,7 @@
   Connect your bluetooth and use device manager to determine where it is connecte
 */
 
+#include <Arduino.h>          //include for PlatformIO IDE
 #include <SoftwareSerial.h> //include Bluetooth module
 
 //Bluetooth module connections

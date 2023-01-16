@@ -6,6 +6,7 @@
   GND GND
 */
 
+#include <Arduino.h>          //include for PlatformIO IDE
 #include <NewPing.h>
 const int PING_PIN = 8; // Arduino pin for both trig and echo tied together on 4 pin [data pin]
 NewPing sonar(PING_PIN, PING_PIN);

@@ -35,6 +35,7 @@
   Pushbutton  A15
 */
 
+#include <Arduino.h>          //include for PlatformIO IDE
 #include <AccelStepper.h>//include the stepper motor library
 #include <MultiStepper.h>//include multiple stepper motor library
 #include <NewPing.h> //include sonar library
@@ -82,8 +83,8 @@ MultiStepper steppers;//create instance to control multiple steppers at the same
 #define snrRight  A9  //front right sonar 
 #define button    A15    //pushbutton 
 
-NewPing SNL(snrLeft, snrLeft);    //create an instance of the left sonar
-NewPing SNR(snrRight, snrRight);  //create an instance of the right sonar
+NewPing sonarLt(snrLeft, snrLeft);    //create an instance of the left sonar
+NewPing sonarRt(snrRight, snrRight);  //create an instance of the right sonar
 
 #define irThresh    400 // The IR threshold for presence of an obstacle
 #define snrThresh   5   // The sonar threshold for presence of an obstacle
@@ -146,7 +147,25 @@ byte layers = 2; //[wander runAway collide]
 
 #define timer_int 250000 // 1/2 second (500000 us) period for timer interrupt
 
-
+/*
+  This is a sample updateSensors() function and it should be updated along with the description to reflect what you actually implemented
+  to meet the lab requirements.
+*/
+void updateSensors() {
+  //  Serial.print("updateSensors\t");
+  //  Serial.println(test_state);
+  //test_state = !test_state;//LED to test the heartbeat of the timer interrupt routine
+  //digitalWrite(enableLED, test_state);  // Toggles the LED to let you know the timer is working
+  test_state = !test_state;
+  digitalWrite(test_led, test_state);
+  flag = 0;       //clear all sensor flags
+  state = 0;      //clear all state flags
+  updateIR();     //update IR readings and update flag variable and state machine
+  //updateSonar();  //update Sonar readings and update flag variable and state machine
+  //updateSonar2(); //there are 2 ways to read sonar data, this is the 2nd option, use whichever one works best for your hardware
+  updateState();  //update State Machine based upon sensor readings
+  //delay(1000);     //added so that you can read the data on the serial monitor
+}
 
 /*
    This is a sample updateIR() function, the description and code should be updated to take an average, consider all sensor and reflect
@@ -229,9 +248,9 @@ void updateSonar() {
   the necesary changes for the lab requirements.
 */
 void updateSonar2() {
-  srRightAvg =  SNR.ping_in(); //right sonara in inches
+  srRightAvg =  sonarRt.ping_in(); //right sonara in inches
   delay(50);
-  srLeftAvg = SNL.ping_in(); //left sonar in inches
+  srLeftAvg = sonarLt.ping_in(); //left sonar in inches
   //    Serial.print("lt snr:\t");
   //    Serial.print(srLeftAvg);
   //    Serial.print("rt snr:\t");
@@ -270,32 +289,38 @@ void updateState() {
   //    Serial.println(state, BIN);
 }
 
-
 /*
-  This is a sample updateSensors() function and it should be updated along with the description to reflect what you actually implemented
-  to meet the lab requirements.
+   This is a sample robotMotion() function, the description and code should be updated to reflect the actual robot motion function that you will implement
+   based upon the the lab requirements.  Some things to consider, you cannot use a blocking motor function because you need to use sensor data to update
+   movement.  You also need to continue to poll    the sensors during the motion and update flags and state because this will serve as your interrupt to
+   stop or change movement.
 */
-void updateSensors() {
-  //  Serial.print("updateSensors\t");
-  //  Serial.println(test_state);
-  //test_state = !test_state;//LED to test the heartbeat of the timer interrupt routine
-  //digitalWrite(enableLED, test_state);  // Toggles the LED to let you know the timer is working
-  test_state = !test_state;
-  digitalWrite(test_led, test_state);
-  flag = 0;       //clear all sensor flags
-  state = 0;      //clear all state flags
-  updateIR();     //update IR readings and update flag variable and state machine
-  //updateSonar();  //update Sonar readings and update flag variable and state machine
-  //updateSonar2(); //there are 2 ways to read sonar data, this is the 2nd option, use whichever one works best for your hardware
-  updateState();  //update State Machine based upon sensor readings
-  //delay(1000);     //added so that you can read the data on the serial monitor
+void robotMotion() {
+  if ((flag & 0b1) || bitRead(state, collide)) { //check for a collide state
+    stop();
+    Serial.println("robot stop");
+  }
+  else{
+    Serial.println("robot forward");
+    forward(one_rotation);//move forward as long as all sensors are clear
+  }
+}
+
+void forward(int rot) {
+  long positions[2]; // Array of desired stepper positions
+  stepperRight.setCurrentPosition(0);
+  stepperLeft.setCurrentPosition(0);
+  positions[0] = stepperRight.currentPosition() + rot;  //right motor absolute position
+  positions[1] = stepperLeft.currentPosition() + rot;   //left motor absolute position
+  stepperRight.move(positions[0]);  //move right motor to position
+  stepperLeft.move(positions[1]);   //move left motor to position
+  runToStop();//run until the robot reaches the target
 }
 
 void stop() {
   stepperRight.stop();
   stepperLeft.stop();
 }
-
 
 /*This function, runToStop(), will run the robot until the target is achieved and
    then stop it
@@ -311,35 +336,6 @@ void runToStop ( void ) {
       runNow = 0;
       stop();
     }
-  }
-}
-
-void forward(int rot) {
-  long positions[2]; // Array of desired stepper positions
-  stepperRight.setCurrentPosition(0);
-  stepperLeft.setCurrentPosition(0);
-  positions[0] = stepperRight.currentPosition() + rot;  //right motor absolute position
-  positions[1] = stepperLeft.currentPosition() + rot;   //left motor absolute position
-  stepperRight.move(positions[0]);  //move right motor to position
-  stepperLeft.move(positions[1]);   //move left motor to position
-  runToStop();//run until the robot reaches the target
-}
-
-
-/*
-   This is a sample robotMotion() function, the description and code should be updated to reflect the actual robot motion function that you will implement
-   based upon the the lab requirements.  Some things to consider, you cannot use a blocking motor function because you need to use sensor data to update
-   movement.  You also need to continue to poll    the sensors during the motion and update flags and state because this will serve as your interrupt to
-   stop or change movement.
-*/
-void robotMotion() {
-  if ((flag & 0b1) || bitRead(state, collide)) { //check for a collide state
-    stop();
-    Serial.println("robot stop");
-  }
-  else{
-    Serial.println("robot forward");
-    forward(one_rotation);//move forward as long as all sensors are clear
   }
 }
 
