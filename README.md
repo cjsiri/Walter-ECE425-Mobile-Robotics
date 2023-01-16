@@ -1,7 +1,7 @@
 # Walter-ECE425-Mobile-Robotics
 ## Equipment
 
-### Hardware Connections
+## Hardware Connections
 
 ## File Storage
 
