@@ -1,24 +1,15 @@
 /**
- * Author Names: Chirag Sirigere
+ * Author Name: Chirag Sirigere
  * Date Created: 12/2/2022
- * Program Name: Walter_main.cpp
- * Program Layout:
- *  ECE425
- *  |- .pio
- *  |- .vscode
- *  |- include
- *  |- lib
- *  |- src
- *  |-- main.cpp
- *  |- test
- *  |- .gitignore
- *  |- platformio.ini
- *  |- README.md
+ * Program Name: main.cpp
+ * Program Descriptions:
+ *  Lab1:
+ *    This program will introduce using the stepper motor library to create motion algorithms for the robot.
+ *    The motions will be go to angle, go to goal, move in a circle, square, figure eight and teleoperation (stop, forward, spin, reverse, turn)
+ *    It will also include wireless commmunication for remote control of the robot by using a game controller or serial monitor.
  * 
- * Program Description:
- *  This program will introduce using the stepper motor library to create motion algorithms for the robot.
- *  The motions will be go to angle, go to goal, move in a circle, square, figure eight and teleoperation (stop, forward, spin, reverse, turn)
- *  It will also include wireless commmunication for remote control of the robot by using a game controller or serial monitor.
+ *  Lab2:
+ *    This program will implement a behavior-based control architecture for a mobile robot for obstacle avoidance and random wander.
  * 
  * Key Functions:
  *  moveCircle - given the diameter in inches and direction of clockwise or counterclockwise, move the robot in a circle with that diameter
@@ -40,8 +31,6 @@
  *    runToNewPosition() is a library function that uses blocking with accel/decel to achieve target posiiton
  *  
  * Hardware Connections:
- *  Arduino pin mappings: https://www.arduino.cc/en/Hacking/PinMapping2560
- * 
  *  MPU6050 Pinout:
  *    digital pin 2 - INT
  *    SDA pin 20 - SDA
@@ -55,16 +44,16 @@
  *    digital pin 51 - right stepper motor direction pin
  *    digital pin 52 - left stepper motor step pin
  *    digital pin 53 - left stepper motor direction pin
- *    digital pin 13 - enable LED on microcontroller
  *    GND - MS1
- *    5V - MS2 (driving a motor in quarter-step mode will give the 200-step-per-revolution motor
- *              800 microsteps per revolution by using four different current levels.)
+ *    5V -  MS2 (driving a motor in quarter-step mode will give the 200-step-per-revolution motor
+ *               800 microsteps per revolution by using four different current levels.)
  *    GND - MS3
  * 
  *  LED Pinout:
- *    digital pin 6 - red LED in series with 220 ohm resistor
- *    digital pin 7 - green LED in series with 220 ohm resistor
- *    digital pin 8 - yellow LED in series with 220 ohm resistor
+ *    digital pin 5 - blue LED in series with 220 ohm resistor
+ *    digital pin 6 - green LED in series with 220 ohm resistor
+ *    digital pin 7 - yellow LED in series with 220 ohm resistor
+ *    digital pin 13 - enable LED on microcontroller
  * 
  *  Encoder Pinout:
  *    digital pin 18 - left encoder pin
@@ -75,7 +64,19 @@
  *    digital pin 20 - IMU SDA
  *    digital pin 21 - IMU SCL
  * 
+ *  IR Sensor Pinout:
+ *    A0 - Front IR
+ *    A1 - Back IR
+ *    A2 - Right IR
+ *    A3 - Left IR
+ * 
+ *  Sonar Sensor Pinout:
+ *    A4 - Left Sonar
+ *    A5 - Right Sonar
+ * 
  * Resources:
+ *  Arduino pin mappings: https://www.arduino.cc/en/Hacking/PinMapping2560
+ * 
  *  A4988 Stepper Motor Driver:
  *    https://www.makerguides.com/a4988-stepper-motor-driver-arduino-tutorial/
  * 
@@ -85,6 +86,14 @@
  *    https://playground.arduino.cc/code/timer1
  *    https://playground.arduino.cc/Main/TimerPWMCheatsheet
  *    http://arduinoinfo.mywikis.net/wiki/HOME
+ * 
+ *  State Machine flag and state byte setup:
+ *    The flag byte (8 bits) variable will hold the IR and sonar data [X X snrRight snrLeft irLeft irRight irRear irFront]
+ *    The state byte (8 bits) variable will hold the state information as well as motor motion [X X X wander runAway collide rev fwd]
+ *    Use the following functions to read, clear and set bits in the byte
+ *      bitRead(state, wander)) { // check if the wander state is active
+ *      bitClear(state, wander);//clear the the wander state
+ *      bitSet(state, wander);//set the wander state
 */
 
 //include all necessary libraries

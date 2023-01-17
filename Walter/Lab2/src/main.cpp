@@ -1,38 +1,99 @@
-/*&StateMachine.ino
-  Author: Carlotta. A. Berry
-  Date: December 3, 2016
-  This program will provide a template for an example of implementing a behavior-based control architecture
-  for a mobile robot to implement obstacle avoidance and random wander. There are many ways to create a state machine
-  and this is just one. It is to help get you started and brainstorm ideas, you are not required to use it.
-  Feel free to create your own version of state machine.
-
-  The flag byte (8 bits) variable will hold the IR and sonar data [X X snrRight snrLeft irLeft irRight irRear irFront]
-  The state byte (8 bits) variable will hold the state information as well as motor motion [X X X wander runAway collide rev fwd]
-
-  Use the following functions to read, clear and set bits in the byte
-  bitRead(state, wander)) { // check if the wander state is active
-  bitClear(state, wander);//clear the the wander state
-  bitSet(state, wander);//set the wander state
-
-  Hardware Connections:
-  digital pin 48 - enable PIN on A4988 Stepper Motor Driver StepSTICK
-  digital pin 50 - right stepper motor step pin
-  digital pin 51 - right stepper motor direction pin
-  digital pin 52 - left stepper motor step pin
-  digital pin 53 - left stepper motor direction pin
-  digital pin 13 - enable LED on microcontroller
-
-  digital pin 5 - red LED in series with 220 ohm resistor
-  digital pin 6 - green LED in series with 220 ohm resistor
-  digital pin 7 - yellow LED in series with 220 ohm resistor
-
-  Front IR    A0
-  Back IR     A1
-  Right IR    A2
-  Left IR     A3
-  Left Sonar  A8
-  Right Sonar A9
-  Pushbutton  A15
+/**
+ * Author Name: Chirag Sirigere
+ * Date Created: 12/2/2022
+ * Program Name: main.cpp
+ * Program Descriptions:
+ *  Lab1:
+ *    This program will introduce using the stepper motor library to create motion algorithms for the robot.
+ *    The motions will be go to angle, go to goal, move in a circle, square, figure eight and teleoperation (stop, forward, spin, reverse, turn)
+ *    It will also include wireless commmunication for remote control of the robot by using a game controller or serial monitor.
+ * 
+ *  Lab2:
+ *    This program will implement a behavior-based control architecture for a mobile robot for obstacle avoidance and random wander.
+ * 
+ * Key Functions:
+ *  moveCircle - given the diameter in inches and direction of clockwise or counterclockwise, move the robot in a circle with that diameter
+ *  moveFigure8 - given the diameter in inches, use the moveCircle() function with direction input to create a Figure 8
+ *  forward, reverse - both wheels move with same velocity, same direction
+ *  pivot - one wheel stationary, one wheel moves forward or back
+ *  spin - both wheels move with same velocity opposite direction
+ *  turn - both wheels move with same direction different velocity
+ *  stop - both wheels stationary
+ * 
+ *  Library Functions:
+ *    move() is a library function for relative movement to set a target position
+ *    moveTo() is a library function for absolute movement to set a target position
+ *    stop() is a library function that causes the stepper to stop as quickly as possible
+ *    run() is a library function that uses accel and decel to achieve target position, no blocking
+ *    runSpeed() is a library function that uses constant speed to achieve target position, no blocking
+ *    runToPosition() is a library function that uses blocking with accel/decel to achieve target position
+ *    runSpeedToPosition() is a library function that uses constant speed to achieve target posiiton, no blocking
+ *    runToNewPosition() is a library function that uses blocking with accel/decel to achieve target posiiton
+ *  
+ * Hardware Connections:
+ *  MPU6050 Pinout:
+ *    digital pin 2 - INT
+ *    SDA pin 20 - SDA
+ *    SCL pin 21 - SCL
+ *    GND - GND
+ *    VCC - 5V rail
+ * 
+ *  A4988 Stepper Motor Driver Pinout: https://www.pololu.com/product/1182
+ *    digital pin 48 - enable PIN on A4988 Stepper Motor Driver StepSTICK
+ *    digital pin 50 - right stepper motor step pin
+ *    digital pin 51 - right stepper motor direction pin
+ *    digital pin 52 - left stepper motor step pin
+ *    digital pin 53 - left stepper motor direction pin
+ *    GND - MS1
+ *    5V -  MS2 (driving a motor in quarter-step mode will give the 200-step-per-revolution motor
+ *               800 microsteps per revolution by using four different current levels.)
+ *    GND - MS3
+ * 
+ *  LED Pinout:
+ *    digital pin 5 - blue LED in series with 220 ohm resistor
+ *    digital pin 6 - green LED in series with 220 ohm resistor
+ *    digital pin 7 - yellow LED in series with 220 ohm resistor
+ *    digital pin 13 - enable LED on microcontroller
+ * 
+ *  Encoder Pinout:
+ *    digital pin 18 - left encoder pin
+ *    digital pin 19 - right encoder pin
+ * 
+ *  IMU Pinout:
+ *    digital pin 2 - IMU INT
+ *    digital pin 20 - IMU SDA
+ *    digital pin 21 - IMU SCL
+ * 
+ *  IR Sensor Pinout:
+ *    A0 - Front IR
+ *    A1 - Back IR
+ *    A2 - Right IR
+ *    A3 - Left IR
+ * 
+ *  Sonar Sensor Pinout:
+ *    A4 - Left Sonar
+ *    A5 - Right Sonar
+ * 
+ * Resources:
+ *  Arduino pin mappings: https://www.arduino.cc/en/Hacking/PinMapping2560
+ * 
+ *  A4988 Stepper Motor Driver:
+ *    https://www.makerguides.com/a4988-stepper-motor-driver-arduino-tutorial/
+ * 
+ *  Interrupts:
+ *    https://www.arduino.cc/reference/en/language/functions/external-interrupts/attachinterrupt/
+ *    https://www.arduino.cc/en/Tutorial/CurieTimer1Interrupt
+ *    https://playground.arduino.cc/code/timer1
+ *    https://playground.arduino.cc/Main/TimerPWMCheatsheet
+ *    http://arduinoinfo.mywikis.net/wiki/HOME
+ * 
+ *  State Machine flag and state byte setup:
+ *    The flag byte (8 bits) variable will hold the IR and sonar data [X X snrRight snrLeft irLeft irRight irRear irFront]
+ *    The state byte (8 bits) variable will hold the state information as well as motor motion [X X X wander runAway collide rev fwd]
+ *    Use the following functions to read, clear and set bits in the byte
+ *      bitRead(state, wander)) { // check if the wander state is active
+ *      bitClear(state, wander);//clear the the wander state
+ *      bitSet(state, wander);//set the wander state
 */
 
 //include all necessary libraries
@@ -109,7 +170,6 @@ SoftwareSerial BTSerial(BTTX, BTRX);
 #define irRear  A1//back IR analog pin
 #define irRight A2 //right IR analog pin
 #define irLeft  A3 //left IR analog pin
-#define button A15 //pushbutton
 
 #define irThresh    5 //in inches // The IR threshold for presence of an obstacle - 400 raw value
 #define snrThresh   5   // The sonar threshold for presence of an obstacle
@@ -125,11 +185,11 @@ int irFrontAvg;  //variable to hold average of current front IR reading
 int irLeftAvg;   //variable to hold average of current left IR reading
 int irRearAvg;   //variable to hold average of current rear IR reading
 int irRightAvg;   //variable to hold average of current right IR reading
-int irIdx = 0;//index for 5 IR readings to take the average
+int irIdx = 0; //index for 5 IR readings to take the average
 
 //define sonar connections
-#define snrLeft 8  //front left sonar 
-#define snrRight 9 //front right sonar 
+#define snrLeft A4  //front left sonar
+#define snrRight A5 //front right sonar
 long SNRDist;
 long SNLDist;
 
