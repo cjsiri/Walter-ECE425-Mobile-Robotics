@@ -37,6 +37,23 @@
 ## Hardware Connections
 ![Walter Pinout](WalterECE425.png)
 
+## Robot Characteristics
+
+### Robot Dimensions
+
+### Robot Calibration
+
+#### HC-SR04 Sonar Sensors
+
+#### SHARP 2Y0A21 IR Sensors
+
+#### SHARP 2D120X IR Sensors
+
+#### MPU6050 3-axis Gyroscope and 3-axis Accelerometer
+
+#### HC05 Bluetooth Module
+
+#### A4988 Stepper Motor Drivers
 
 ## File Storage
 
