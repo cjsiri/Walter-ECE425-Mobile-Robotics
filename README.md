@@ -37,7 +37,7 @@
 ## Hardware Connections
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="WalterECE425.svg">
+  <source media="(prefers-color-scheme: light)" srcset="WalterECE425.svg">
   <img alt="WalterECE425" src="WalterECE425.svg">
 </picture>
 
