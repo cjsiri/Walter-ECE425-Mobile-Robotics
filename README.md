@@ -38,6 +38,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="WalterECE425.svg">
+  <img alt="WalterECE425" src="WalterECE425.svg">
 </picture>
 
 ## File Storage
