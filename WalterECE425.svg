@@ -2,6 +2,18 @@
 <!-- Generator: Circuit Diagram, cdlibrary.dll 4.0.0.0 -->
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
 <svg version="1.1" width="1540" height="840" xmlns="http://www.w3.org/2000/svg">
+	<text x="1150" y="220" style="font-family:Arial;font-size:11px;text-anchor:start" dominant-baseline="middle" transform="rotate(0, 1150, 220)">o</text>
+	<text x="1160" y="220" style="font-family:Arial;font-size:11px;text-anchor:start" dominant-baseline="middle" transform="rotate(0, 1160, 220)">o</text>
+	<text x="1100" y="560" style="font-family:Arial;font-size:11px;text-anchor:start" dominant-baseline="middle" transform="rotate(0, 1100, 560)">o</text>
+	<text x="1080" y="560" style="font-family:Arial;font-size:11px;text-anchor:start" dominant-baseline="middle" transform="rotate(0, 1080, 560)">o</text>
+	<text x="1070" y="560" style="font-family:Arial;font-size:11px;text-anchor:start" dominant-baseline="middle" transform="rotate(0, 1070, 560)">o</text>
+	<text x="1060" y="560" style="font-family:Arial;font-size:11px;text-anchor:start" dominant-baseline="middle" transform="rotate(0, 1060, 560)">o</text>
+	<text x="1050" y="560" style="font-family:Arial;font-size:11px;text-anchor:start" dominant-baseline="middle" transform="rotate(0, 1050, 560)">o</text>
+	<text x="1310" y="340" style="font-family:Arial;font-size:11px;text-anchor:start" dominant-baseline="middle" transform="rotate(0, 1310, 340)">o</text>
+	<text x="1310" y="350" style="font-family:Arial;font-size:11px;text-anchor:start" dominant-baseline="middle" transform="rotate(0, 1310, 350)">o</text>
+	<text x="1240" y="220" style="font-family:Arial;font-size:11px;text-anchor:start" dominant-baseline="middle" transform="rotate(0, 1240, 220)">o</text>
+	<text x="1310" y="360" style="font-family:Arial;font-size:11px;text-anchor:start" dominant-baseline="middle" transform="rotate(0, 1310, 360)">o</text>
+	<text x="1310" y="370" style="font-family:Arial;font-size:11px;text-anchor:start" dominant-baseline="middle" transform="rotate(0, 1310, 370)">o</text>
 	<path d="M 875,260 L 885,260 L 880,250 L 875,260" style="fill-opacity:0;fill:rgb(0, 0, 0);stroke:rgb(0, 0, 0);stroke-linecap:square;stroke-width:2" />
 	<text x="874" y="254" style="font-family:Arial;font-size:12px;text-anchor:end" dominant-baseline="middle" transform="rotate(0, 874, 254)">+5V</text>
 	<line x1="880" y1="260" x2="880" y2="270" style="stroke:rgb(0, 0, 0);stroke-linecap:square;stroke-width:2" />
