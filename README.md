@@ -17,7 +17,7 @@
 
 2x Photoresistors
 
-1x MPU6050 3-axis Gyroscope and 3-axis Accelerometer
+1x MPU6050 3-axis Gyroscope & 3-axis Accelerometer
 
 ### Motors
 2x 42HS40DF306 Stepper Motors with Encoders
@@ -37,6 +37,14 @@
 ## Hardware Connections
 ![Walter Pinout](WalterECE425.png)
 
+## Software
+
+### Visual Studio Code & PlatformIO
+
+#### Libraries
+
+### Cloning This Repository
+
 ## Robot Characteristics
 
 ### Robot Dimensions
@@ -49,7 +57,7 @@
 
 #### SHARP 2D120X IR Sensors
 
-#### MPU6050 3-axis Gyroscope and 3-axis Accelerometer
+#### MPU6050 3-axis Gyroscope & 3-axis Accelerometer
 
 #### HC05 Bluetooth Module
 
