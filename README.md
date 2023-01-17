@@ -20,7 +20,7 @@
 1x MPU6050 3-axis Gyroscope and 3-axis Accelerometer
 
 ### Motors
-2x 42HS40DF306 Stepper Motors with encoders
+2x 42HS40DF306 Stepper Motors with Encoders
 
 2x A4988 Stepper Motor Drivers
 
@@ -35,9 +35,7 @@
 1x TENERGY Charger
 
 ## Hardware Connections
-
-
-
+![WalterECE425](WalterECE425.png)
 
 ## File Storage
 
