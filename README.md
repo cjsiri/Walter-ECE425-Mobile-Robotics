@@ -35,7 +35,7 @@
 1x TENERGY Charger
 
 ## Hardware Connections
-![WalterECE425](WalterECE425.svg)
+![WalterECE425](WalterECE425.png)
 
 ## File Storage
 
