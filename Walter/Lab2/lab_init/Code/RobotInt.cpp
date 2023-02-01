@@ -1,8 +1,7 @@
 /*RobotInterrupt.ino
   Author: Carlotta. A. Berry
   Date: December 10, 2016
-  This program will test the sonar interrupt code in order to use this for
-  obstacle avoidance. Only the 2 front sonar sensors are used.
+  Description: uses a pin change interrupt with delays to update sonar data based upon falling edge from ping echo and then calls obstacle avoidance routine.
 
   The following pins are usable for PinChangeInterrupt:
   Arduino Uno/Nano/Mini: All pins are usable

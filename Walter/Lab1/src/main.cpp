@@ -103,6 +103,8 @@
 #include <Adafruit_MPU6050.h> //Include library for MPU6050 IMU
 #include <SoftwareSerial.h>   //include Bluetooth module
 
+#define baudrate 9600 //serial baud rate
+
 //state LEDs connections
 #define blueLED 5             //blue LED for displaying states
 #define grnLED 6              //green LED for displaying states
@@ -130,8 +132,10 @@ const unsigned short STEP_TIME = 500;           //delay time between high and lo
 const unsigned short WAIT_TIME = 15000;         //delay for printing data
 const float FULL_REV = 800.0;                   //A4988 Stepper Motor Driver quarter step ticks for full revolution of wheel
 
-const float WIDTH_BOT = 23.3; //cm
+const float WIDTH_BOT = 23.2; //cm
 const float RADIUS_BOT = 11.7; //cm
+const float WIDTH_WHEEL = 2.5; //cm
+const float RADIUS_WHEEL = 4.25; //cm
 const float CM_TO_STEPS = 25.6; 
 const float TICKS_TO_STEPS = 20.0;
 const float STEPS_TO_TICKS = 1.0/20.0;
@@ -582,20 +586,21 @@ void move5() {
 
 // Lab 1 Demonstration Functions
 /**
- * This function pivots the robot in one direction 90 degrees.
+ * This function pivots the robot in one direction with inputted degrees.
  * The robot has one wheel not moving while the other wheel moves to pivot.
- * 
- * @param direction A positive value to pivot clockwise or a negative value to pivot counterclockwise
+ * 1075 makes a perfect circle witin 5 degrees, giving a 1075 ticks per 90 degree pivot
+ * While 1050 is under 10 degrees, 1200 is over 40 degrees, 1100 is over 10 degrees, and 1000 is under 30 degrees
+ * @param angle A negative angle to pivot clockwise or a positive value to pivot counterclockwise
  */
-void pivot(int direction) {
+void pivot(float angle) {
   stepperRight.setCurrentPosition(0);
   stepperLeft.setCurrentPosition(0);
-  if (direction > 0) {
-    stepperRight.moveTo(1000);
+  if (angle > 0) {
+    stepperRight.moveTo(abs(angle*1075/90));
     stepperRight.setMaxSpeed(500); //set right motor speed
     stepperRight.runSpeedToPosition(); //move right motor
   } else {
-    stepperLeft.moveTo(1000);
+    stepperLeft.moveTo(abs(angle*1075/90));
     stepperLeft.setMaxSpeed(500); //set left motor speed
     stepperLeft.runSpeedToPosition(); //move left motor
   }
@@ -603,17 +608,20 @@ void pivot(int direction) {
 }
 
 /**
- * This function spins the robot in one direction 360 degrees.
+ * This function spins the robot in one direction with inputted degrees.
+ * 2125 makes a perfect circle within 5 degrees, giving a 2125 ticks per 360 degree spin
+ * While 2000 is under 15 degrees, 2100 is under 10 degrees, 2150 is over 5 degrees
  * 
- * @param direction A positive value to spin clockwise or a negative value to spin counterclockwise
+ * @param angle A negative angle to spin clockwise or a positive value to spin counterclockwise
  */
-void spin(int direction) { //Currently overshoots sometimes
-  if (direction > 0) {
-    stepperRight.moveTo(-2000);
-    stepperLeft.moveTo(2000);
+void spin(float angle) {
+  setBothStepperCurrentPosition(0, 0);
+  if (angle > 0) {
+    stepperRight.moveTo(abs(angle*2125/360));
+    stepperLeft.moveTo(-abs(angle*2125/360));
   } else {
-    stepperRight.moveTo(2000);
-    stepperLeft.moveTo(-2000);
+    stepperRight.moveTo(-abs(angle*2125/360));
+    stepperLeft.moveTo(abs(angle*2125/360));
   }
   setBothStepperSpeed(500, 500); //set motor speeds
   runAtSpeedToPosition(); //move motors
@@ -621,42 +629,29 @@ void spin(int direction) { //Currently overshoots sometimes
 }
 
 /**
- * This function turns the robot forward a quarter circle with a given radius in one direction.
+ * This function turns the robot a quarter circle with a given radius in one direction, forward or reverse.
+ * A proportional gain of 1.075 is used to adjust the error within 5 degrees
+ * While a proportional gain of 1.1 is over 10 degrees, 1.05 is under 10 degrees. Effectively, the error is 27 degrees per 360 degrees
  * 
- * @param radius A turning radius in centimeters. A radius of 0 spins the robot in the clockwise direction 90 degrees (similar to calling spin() a quarter circle).
+ * @param radius A turning radius in centimeters. A radius of 0 spins the robot 90 degrees (similar to calling spin() a quarter circle).
+ * @param angle A positive angle value
  * @param turnDirection An array of direction values
- *                        position 0: a forward [0] or reverse [1] turn
- *                        position 1: a left [0] or right [1] turn
+ *                        MSB: a forward [0] or reverse [1] turn
+ *                        LSB: a left [0] or right [1] turn
  */
-void turn(float radius, bool turnDirection[2]) {
-  /*
-    seems to me that once a radius is given, the robot doesn't make the exact radius turn.
-    Steps I took:
-      1. I input a 15cm CW turn
-      2. Measure 15cm out from the center of the wheel
-      3. Start the robot, call the turn function, and stop the robot
-      5. Attempt to measure 15cm out from the center of the wheel
-      6. The robot is off by exactly 1.5cm
-      7. The robot is also crooked and isn't completing the turn properly
-    
-    Possible Solutions:
-      1. A proportional gain must be placed to counter the error
-      2. Count how many ticks are required for the robot to move forward and then turn
-      3. Have outer turn proportionally less than inner
-  */
-
+void turn(float radius, float angle, bool turnDirection[2]) {
   setBothStepperCurrentPosition(0, 0); //reset stepper positions
-  setBothStepperSpeed(400, 400); //set motor speeds
+  setBothStepperSpeed(500, 500); //set motor speeds
 
   //float diam = 60.0*radius/18; //60 steps per 18cm
-  float inner = 2.0 * 3.14 * (radius*1.2 - WIDTH_BOT/2.0) * (90.0/360.0) *0.95;
-  float outer = 2.0 * 3.14 * (radius*1.2 + WIDTH_BOT/2.0) * (90.0/360.0) *0.95;
+  float outerArc = (radius + (WIDTH_BOT-WIDTH_WHEEL)/2.0) * (angle*PI/180);
+  float innerArc = (radius - (WIDTH_BOT-WIDTH_WHEEL)/2.0) * (angle*PI/180);
 
-  int innerSteps = inner * 29.958;
-  int outerSteps = outer * 29.958;
+  int outerSteps = outerArc * FULL_REV/(2 * PI * RADIUS_WHEEL) * 1.075;
+  int innerSteps = innerArc * FULL_REV/(2 * PI * RADIUS_WHEEL) * 1.075;
 
   long positions[2]; // Array of desired stepper positions
-  
+
   // Check the turn direction (left or right, and forward or backward)
   if (turnDirection[0] == 0 && turnDirection[1] == 0) {
     positions[0] = outerSteps; //right motor absolute position
@@ -687,13 +682,10 @@ void turn(float radius, bool turnDirection[2]) {
  * 
  * @param distance A value in centimeters
 */
-void forward(int distance) {
-  encoder[LEFT] = 0;
-  encoder[RIGHT] = 0;
+void forward(float distance) {
+  setBothStepperCurrentPosition(0,0);
+  float steps = distance * FULL_REV/(2 * PI * RADIUS_WHEEL);
 
-  float steps = distance * 29.9586;
-  float ticks = steps * (40/FULL_REV);
-  
   stepperRight.moveTo(steps); //move one full rotation forward relative to current position
   stepperLeft.moveTo(steps); //move one full rotation forward relative to current position
   setBothStepperSpeed(500, 500); //set stepper speeds
@@ -701,18 +693,6 @@ void forward(int distance) {
   stepperLeft.runSpeedToPosition(); //move left motor
 
   runToStop(); //run until the robot reaches the target
-
-  int errorLeft = ticks - encoder[LEFT];
-  int errorRight = ticks - encoder[RIGHT];
-
-  int correction = TICKS_TO_STEPS * max(errorLeft, errorRight);
-  setBothStepperCurrentPosition(0, 0); //reset stepper positions
-  stepperRight.moveTo(correction); //move one full rotation forward relative to current position
-  stepperLeft.moveTo(correction); //move one full rotation forward relative to current position
-  setBothStepperSpeed(250, 250); //set stepper speeds
-  stepperRight.runSpeedToPosition(); //move right motor
-  stepperLeft.runSpeedToPosition(); //move left motor
-  runToStop();
 }
 
 /**
@@ -720,16 +700,8 @@ void forward(int distance) {
  * 
  * @param distance A value in centimeters
 */
-void reverse(int distance) {
-  float steps = distance * 29.9586;
-  Serial.print(steps);
-  stepperRight.moveTo(-steps); //move one full rotation forward relative to current position
-  stepperLeft.moveTo(-steps); //move one full rotation forward relative to current position
-  stepperRight.setMaxSpeed(500); //set right motor speed
-  stepperLeft.setMaxSpeed(500); //set left motor speed
-  stepperRight.runSpeedToPosition(); //move right motor
-  stepperLeft.runSpeedToPosition(); //move left motor
-  runToStop(); //run until the robot reaches the target
+void reverse(float distance) {
+  forward(-distance);
 }
 
 /**
@@ -738,28 +710,10 @@ void reverse(int distance) {
  * @param diam the diameter of the circle in inches
  * @param dir A positive value to turn right or a negative value to turn left
 */
-void moveCircle(int diam, int dir) {
+void moveCircle(float diam, bool dir[2]) {
   digitalWrite(blueLED, HIGH); //turn off red LED
-  setBothStepperCurrentPosition(0, 0); //reset stepper positions
-  setBothStepperSpeed(500, 500); //set stepper speeds
-
-  float inner = 2 * 3.14 * ((diam/2) - WIDTH_BOT/2) * 0.9;
-  float outer = 2 * 3.14 * ((diam/2) + WIDTH_BOT/2) * 0.9;
-
-  int innerSteps = inner * 29.958;
-  int outerSteps = outer * 29.958;
-  
-  long positions[2]; // Array of desired stepper positions
-  if (dir > 0) {
-    positions[0] = innerSteps; //right motor absolute position
-    positions[1] = outerSteps; //left motor absolute position
-    steppers.moveTo(positions);
-  } else {
-    positions[0] = outerSteps; //right motor absolute position
-    positions[1] = innerSteps; //left motor absolute position
-    steppers.moveTo(positions);
-  }
-  steppers.runSpeedToPosition(); // Blocks until all are in position
+  short int circle = 360;
+  turn(diam/2,circle,dir);
   digitalWrite(blueLED, LOW); //turn off red LED
 }
 
@@ -769,67 +723,26 @@ void moveCircle(int diam, int dir) {
  * 
  * @param diam the diameter in centimeters
 */
-void moveFigure8(int diam) {
+void moveFigure8(float diam) {
   digitalWrite(blueLED, HIGH); //turn off red LED
   digitalWrite(ylwLED, HIGH); //turn on yellow LED
-
-  moveCircle(diam, -1);
-  moveCircle(diam, 1);
+  bool dir[2] = {0,1};
+  moveCircle(diam, dir);
+  dir[1] = 0;
+  moveCircle(diam, dir);
   digitalWrite(blueLED, LOW); //turn off red LED
   digitalWrite(ylwLED, LOW); //turn on yellow LED
 }
 
 /**
- Calculates arc length needed to turn to angle and calls multistepper to turn robot
- After turning, encoders are used to error check and move robot again if it moved too much or too little
+ * Calculates arc length needed to turn to angle and calls multistepper to turn robot
+ * After turning, encoders are used to error check and move robot again if it moved too much or too little
 */
 void goToAngle(float angle) {
-  encoder[LEFT] = 0;
-  encoder[RIGHT] = 0;
   digitalWrite(blueLED, LOW); //turn off red LED
   digitalWrite(grnLED, HIGH); //turn on green LED
   digitalWrite(ylwLED, LOW); //turn off yellow LED
-  float arclength = 2.0 * PI * RADIUS_BOT * (angle/360.0) * 1.12;
-  int steps = arclength * CM_TO_STEPS;
-  int ticks = steps * STEPS_TO_TICKS;
-  ticks = abs(ticks);
-
-  stepperRight.moveTo(steps);
-  stepperLeft.moveTo(-steps);
-  Serial.print("Steps: ");
-  Serial.println(steps);
-  Serial.print("Ticks: ");
-  Serial.println(ticks);
-
-  setBothStepperSpeed(500, 500); //set motor speeds
-  stepperRight.runSpeedToPosition(); //move right motor
-  stepperLeft.runSpeedToPosition(); //move left motorw
-  runToStop();
-  
-  
-  Serial.print("Left Encoder: ");
-  Serial.println(encoder[LEFT]);
-  Serial.println("Right Endoder: ");
-  Serial.println(encoder[RIGHT]);
-  int errorLeft = ticks - encoder[LEFT];
-  int errorRight = ticks - encoder[RIGHT];
-  Serial.print("Error Left: ");
-  Serial.println(errorLeft);
-  Serial.print("Error Right: ");
-  Serial.println(errorRight);
-
-  int correctStepsLeft = errorLeft * TICKS_TO_STEPS;
-  int correctStepsRight = errorRight * TICKS_TO_STEPS;
-
-  setBothStepperCurrentPosition(0, 0); //reset stepper positions
-  Serial.print("Correction steps: ");
-  Serial.println(correctStepsLeft);
-  stepperRight.moveTo(-correctStepsRight);
-  stepperLeft.moveTo(correctStepsLeft);
-  stepperRight.runSpeedToPosition(); //move right motor
-  stepperLeft.runSpeedToPosition(); //move left motor
-
-  runToStop(); //run until the robot reaches the target
+  spin(angle);
 }
 
 /**
@@ -844,14 +757,13 @@ void goToGoal(float x, float y) {
 
   double radians = atan2(y, x); //returns angle to x, y in radians
   
-  float angle = (radians * 180.0/PI);
+  float degrees = (radians * 180.0/PI);
   Serial.print("Degrees: ");
-  Serial.println(angle);
-  goToAngle(angle);
+  Serial.println(degrees);
+  goToAngle(degrees);
   float distance = sqrt((x*x) + (y*y));
 
-  forward(distance); 
-
+  forward(distance);
 }
 
 /*
@@ -875,14 +787,12 @@ void moveSquare(float sideLength) {
 //// MAIN
 void setup()
 {
-  int baudrate = 9600; //serial monitor baud rate'
-  int BTbaud = 9600;  // HC-05 default speed in AT command more
   init_stepper(); //set up stepper motor
 
   attachInterrupt(digitalPinToInterrupt(ltEncoder), LwheelSpeed, CHANGE);    //init the interrupt mode for the left encoder
   attachInterrupt(digitalPinToInterrupt(rtEncoder), RwheelSpeed, CHANGE);   //init the interrupt mode for the right encoder
 
-  BTSerial.begin(BTbaud);     //start Bluetooth communication
+  BTSerial.begin(baudrate);     //start Bluetooth communication
   Serial.begin(baudrate);     //start serial monitor communication
 
   while (!Serial) {
@@ -891,7 +801,7 @@ void setup()
 
   init_BT(); //initialize Bluetooth
 
-  //init_IMU(); //initialize IMU
+  init_IMU(); //initialize IMU
   
   Serial.println("Robot starting...");
   Serial.println("");
@@ -915,35 +825,16 @@ void loop()
 
   //Uncomment to Send and Receive with Bluetooth
   //Bluetooth_comm();
-  /*
-  delay(3000);
-  forward(30);
-  delay(1000);
-  reverse(30);
-  delay(1000);
-  spin(1);
-  delay(1000);
-  pivot(1);
-  delay(1000);
-  turn(1);
-  */
   
-  //pivot(1);
-  //spin(1);
-  //bool dir[2] = {1,1};
-  //turn(15, dir);
-  delay(2000);
-  goToAngle(-60);
-  delay(5000);
-  goToAngle(135);
-  delay(5000);
-  goToGoal(0, 100);
-  delay(5000);
-  goToGoal(-67, 100);
-  delay(5000);
-  moveSquare(100);
-  //print_encoder_data();
-
-  //delay(wait_time);               //wait to move robot or read data
-  delay(WAIT_TIME); 
+  // Functions
+  //forward(10);
+  //reverse(10);
+  //pivot(-360);
+  //spin(-360);
+  //bool td[2] = {0,1}; turn(30,90,td);
+  //bool td[2] = {0,1}; moveCircle(60,td);
+  //moveFigure8(60);
+  goToAngle(30);
+  //goToGoal(-10,20);
+  delay(PAUSE_TIME); // wait to loop
 }

@@ -4,6 +4,7 @@
   data pin 7
   VCC 5V
   GND GND
+  Description: uses NewPing library to read sensor data without an interrupt
 */
 
 #include <Arduino.h>          //include for PlatformIO IDE

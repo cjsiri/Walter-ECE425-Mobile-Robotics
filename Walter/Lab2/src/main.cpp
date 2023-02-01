@@ -5,11 +5,13 @@
  * Program Descriptions:
  *  Lab1:
  *    This program will introduce using the stepper motor library to create motion algorithms for the robot.
- *    The motions will be go to angle, go to goal, move in a circle, square, figure eight and teleoperation (stop, forward, spin, reverse, turn)
+ *    The motions will be teleoperation (stop, forward, spin, reverse, turn), Go-to-Angle, Go-to-Goal, and move in a circle, square, and figure eight
  *    It will also include wireless commmunication for remote control of the robot by using a game controller or serial monitor.
  * 
  *  Lab2:
- *    This program will implement a behavior-based control architecture for a mobile robot for obstacle avoidance and random wander.
+ *    This program will implement a behavior-based control architecture for a mobile robot for obstacle avoidance and random wander using sensor feedback and a bang-bang or proportional controller.
+ *    The design of the program uses subsumption architecture where layer 0 of the control architecture will be the collide and run away behaviors to keep the robot from hitting obstacles.
+ *    Layer 1 will be the random wander behavior which moves the robot a random distance and/or heading every n seconds.
  * 
  * Key Functions:
  *  moveCircle - given the diameter in inches and direction of clockwise or counterclockwise, move the robot in a circle with that diameter
@@ -109,6 +111,8 @@
 #include <stdlib.h>
 #include <time.h>
 
+#define baudrate 9600 //serial baud rate
+
 //state LEDs connections
 #define blueLED 5             //blue LED for displaying states
 #define grnLED 6              //green LED for displaying states
@@ -150,7 +154,7 @@ long int accumTicks[2] = {0, 0};          //variable to hold accumulated ticks s
 //Robot Constants
 const float WIDTH_BOT = 23.3; //cm
 const float RADIUS_BOT = 11.7; //cm
-const float CM_TO_STEPS = 29.95;//25.6; 
+const float CM_TO_STEPS = 29.95; //25.6;
 const float TICKS_TO_STEPS = 20.0;
 const float STEPS_TO_TICKS = 1.0/20.0;
 
@@ -171,11 +175,10 @@ SoftwareSerial BTSerial(BTTX, BTRX);
 #define irRight A2 //right IR analog pin
 #define irLeft  A3 //left IR analog pin
 
-#define irThresh    5 //in inches // The IR threshold for presence of an obstacle - 400 raw value
-#define snrThresh   5   // The sonar threshold for presence of an obstacle
-#define minThresh   0   // The sonar minimum threshold to filter out noise
-#define stopThresh  150 // If the robot has been stopped for this threshold move
-#define baud_rate 9600//set serial communication baud rate
+#define irThresh   5 //in inches // The IR threshold for presence of an obstacle - 400 raw value
+#define snrThresh  5   // The sonar threshold for presence of an obstacle
+#define minThresh  0   // The sonar minimum threshold to filter out noise
+#define stopThresh 150 // If the robot has been stopped for this threshold move
 
 int irFrontArray[5] = {0, 0, 0, 0, 0}; //array to hold 5 front IR readings
 int irRearArray[5] = {0, 0, 0, 0, 0}; //array to hold 5 back IR readings
@@ -1073,7 +1076,7 @@ void setup()
   Timer1.initialize(timer_int);         // initialize timer1, and set a period in microseconds
   Timer1.attachInterrupt(updateSensors);  // attaches updateSensors() as a timer overflow interrupt
 
-  Serial.begin(baud_rate);//start serial communication in order to debug the software while coding
+  Serial.begin(baudrate);//start serial communication in order to debug the software while coding
   delay(PAUSE_TIME);//wait 3 seconds before robot moves
 
   aggressive = false;

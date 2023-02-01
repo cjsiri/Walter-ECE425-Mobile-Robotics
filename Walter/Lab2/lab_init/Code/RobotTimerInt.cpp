@@ -1,9 +1,9 @@
 /*RobotTimer1SonarTimer2Interrupt.ino
   Author: Carlotta. A. Berry
   Date: December 13, 2018
-  This program will test using a timer1 interrupt to update the IR datat and
+  This program will test using a timer1 interrupt to update the IR data and
   using the NewPing library with a timer2 interrupt to update the sonar data
-  in order  to create an obstacle avoidance beavhior on the robot.
+  in order to create an obstacle avoidance beavhior on the robot.
 
   Interrupts
   https://www.arduino.cc/reference/en/language/functions/external-interrupts/attachinterrupt/
