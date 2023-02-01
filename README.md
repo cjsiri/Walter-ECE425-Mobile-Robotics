@@ -43,8 +43,6 @@
 
 #### Libraries
 
-### Cloning This Repository
-
 ## Robot Characteristics
 
 ### Robot Dimensions
@@ -64,6 +62,8 @@
 #### A4988 Stepper Motor Drivers
 
 ## File Storage
+
+### Cloning This Repository
 
 ## Purpose of Labs
 
