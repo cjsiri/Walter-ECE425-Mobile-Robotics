@@ -5,11 +5,13 @@
  * Program Descriptions:
  *  Lab1:
  *    This program will introduce using the stepper motor library to create motion algorithms for the robot.
- *    The motions will be go to angle, go to goal, move in a circle, square, figure eight and teleoperation (stop, forward, spin, reverse, turn)
+ *    The motions will be teleoperation (stop, forward, spin, reverse, turn), Go-to-Angle, Go-to-Goal, and move in a circle, square, and figure eight
  *    It will also include wireless commmunication for remote control of the robot by using a game controller or serial monitor.
  * 
  *  Lab2:
- *    This program will implement a behavior-based control architecture for a mobile robot for obstacle avoidance and random wander.
+ *    This program will implement a behavior-based control architecture for a mobile robot for obstacle avoidance and random wander using sensor feedback and a bang-bang or proportional controller.
+ *    The design of the program uses subsumption architecture where layer 0 of the control architecture will be the collide and run away behaviors to keep the robot from hitting obstacles.
+ *    Layer 1 will be the random wander behavior which moves the robot a random distance and/or heading every n seconds.
  * 
  * Key Functions:
  *  moveCircle - given the diameter in inches and direction of clockwise or counterclockwise, move the robot in a circle with that diameter
@@ -127,7 +129,7 @@ MultiStepper steppers; //create instance to control multiple steppers at the sam
 #define stepperEnTrue false   //variable for enabling stepper motor
 #define stepperEnFalse true   //variable for disabling stepper motor
 
-const unsigned short PAUSE_TIME = 2500;         //time before robot moves
+const unsigned short PAUSE_TIME = 3000;         //time before robot moves
 const unsigned short STEP_TIME = 500;           //delay time between high and low on step pin
 const unsigned short WAIT_TIME = 15000;         //delay for printing data
 const float FULL_REV = 800.0;                   //A4988 Stepper Motor Driver quarter step ticks for full revolution of wheel
@@ -746,9 +748,9 @@ void goToAngle(float angle) {
 }
 
 /**
- Give the robot x y coordiantes in cm 
- Robot will then call goToAngle and spin to a direction that points to the coordiante
- Will then go calcualted distance to reach coordinate
+ * Give the robot x y coordiantes in cm 
+ * Robot will then call goToAngle and spin to a direction that points to the coordiante
+ * Will then go calcualted distance to reach coordinate
 */
 void goToGoal(float x, float y) {
   digitalWrite(blueLED, LOW); //turn off red LED
@@ -834,7 +836,7 @@ void loop()
   //bool td[2] = {0,1}; turn(30,90,td);
   //bool td[2] = {0,1}; moveCircle(60,td);
   //moveFigure8(60);
-  goToAngle(30);
+  //goToAngle(30);
   //goToGoal(-10,20);
   delay(PAUSE_TIME); // wait to loop
 }

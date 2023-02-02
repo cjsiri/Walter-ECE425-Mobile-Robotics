@@ -105,7 +105,7 @@
 #include <Adafruit_MPU6050.h> //Include library for MPU6050 IMU
 #include <SoftwareSerial.h>   //include Bluetooth module
 #include <NewPing.h>          //include Sonar library
-#include <TimerOne.h>
+#include <TimerOne.h>         //include Timer library
 #include <Wire.h>
 #include <SPI.h>
 #include <stdlib.h>
@@ -135,11 +135,13 @@ MultiStepper steppers; //create instance to control multiple steppers at the sam
 #define stepperEnTrue false   //variable for enabling stepper motor
 #define stepperEnFalse true   //variable for disabling stepper motor
 
-#define robot_spd 1500 //set robot speed
-#define max_accel 10000//maximum robot acceleration
-#define max_spd 2500//maximum robot speed
+#define robot_spd 1500  //set robot speed
+#define max_accel 10000 //maximum robot acceleration
+#define max_spd 2500    //maximum robot speed
 
 const unsigned short PAUSE_TIME = 3000;         //time before robot moves
+const unsigned short STEP_TIME = 500;           //delay time between high and low on step pin
+const unsigned short WAIT_TIME = 15000;         //delay for printing data
 const float FULL_REV = 800.0;                   //A4988 Stepper Motor Driver quarter step ticks for full revolution of wheel
 
 //define encoder pins
@@ -152,9 +154,11 @@ long int lastSpeed[2] = {0, 0};           //variable to hold encoder speed (left
 long int accumTicks[2] = {0, 0};          //variable to hold accumulated ticks since last reset
 
 //Robot Constants
-const float WIDTH_BOT = 23.3; //cm
+const float WIDTH_BOT = 23.2; //cm
 const float RADIUS_BOT = 11.7; //cm
-const float CM_TO_STEPS = 29.95; //25.6;
+const float WIDTH_WHEEL = 2.5; //cm
+const float RADIUS_WHEEL = 4.25; //cm
+const float CM_TO_STEPS = 25.6; 
 const float TICKS_TO_STEPS = 20.0;
 const float STEPS_TO_TICKS = 1.0/20.0;
 
@@ -171,7 +175,7 @@ SoftwareSerial BTSerial(BTTX, BTRX);
 //*****************************
 //define IR sensor connections
 #define irFront A0 //front IR analog pin
-#define irRear  A1//back IR analog pin
+#define irRear  A1 //back IR analog pin
 #define irRight A2 //right IR analog pin
 #define irLeft  A3 //left IR analog pin
 
@@ -201,17 +205,16 @@ NewPing SNR(snrRight, snrRight);  //create an instance of the right sonar
 
 int srLeftArray[5] = {0, 0, 0, 0, 0}; //array to hold 5 left sonar readings
 int srRightArray[5] = {0, 0, 0, 0, 0}; //array to hold 5 right sonar readings
-int srIdx = 0;//index for 5 sonar readings to take the average
-int srLeft;   //variable to hold average of left sonar current reading
-int srRight;  //variable to hold average or right sonar current reading
 int srLeftAvg;  //variable to holde left sonar data
 int srRightAvg; //variable to hold right sonar data
+int srIdx = 0; //index for 5 sonar readings to take the average
 
 // State Machine LED
 volatile boolean test_state; //variable to hold test led state for timer interrupt
 
-int obsIR[4] = {0, 0, 0, 0};
-int obsSonar[2] = {0, 0};
+// arrays to hold obstacles
+bool obsIR[4] = {0, 0, 0, 0};
+bool obsSonar[2] = {0, 0};
 
 //flag byte to hold sensor data
 volatile byte flag = 0;    // Flag to hold IR & Sonar data - used to create the state machine
@@ -239,6 +242,7 @@ volatile byte state = 0;   //state to hold robot states and motor motion
 
 //define layers of subsumption architecture that are active
 byte layers = 2; //[wander runAway collide]
+
 //bit definitions for layers
 #define cLayer 0
 #define rLayer 1
@@ -255,8 +259,8 @@ byte layers = 2; //[wander runAway collide]
  * 4 - Turn forward right
  * 5 - Turn backward left
  * 6 - Turn backward right
- * 7 - Spin right
- * 8 - Change motor speed
+ * 7 - Spin left
+ * 8 - Spin right
  * 9 - 
  * 10 - 
 */
@@ -497,6 +501,9 @@ void Bluetooth_comm(){
   }
 }
 
+//*****************************
+// Lab 1 Methods
+//*****************************
 /**
  * Function to set both wheel speeds
  * 
@@ -535,48 +542,53 @@ void runAtSpeed ( void ) {
   }
 }
 
-/*
-   This is a sample updateIR() function, the description and code should be updated to take an average, consider all sensor and reflect
-   the necesary changes for the lab requirements.
+/**
+ * Stops both stepper motors
 */
-
 void stop() {
   stepperRight.stop();
   stepperLeft.stop();
 }
 
-/*This function, runToStop(), will run the robot until the target is achieved and
-   then stop it
-*/
+/**
+ * Function to run the robot until the target is achieved and then stop it
+ */
 void runToStop ( void ) {
-  int runNow = 1;
+  bool runNow = 1;
+  bool rightStopped = 0;
+  bool leftStopped = 0;
+
   while (runNow) {
-    if (!stepperRight.run() ) {
-      runNow = 0;
-      stop();
+    if (!stepperRight.run()) {
+      rightStopped = 1;
+      stepperRight.stop(); //stop right motor
     }
     if (!stepperLeft.run()) {
+      leftStopped = 1;
+      stepperLeft.stop(); //stop ledt motor
+    }
+    if (rightStopped && leftStopped) {
       runNow = 0;
-      stop();
     }
   }
 }
 
 /**
- * This function pivots the robot in one direction 90 degrees.
+ * This function pivots the robot in one direction with inputted degrees.
  * The robot has one wheel not moving while the other wheel moves to pivot.
- * 
- * @param direction A positive value to pivot clockwise or a negative value to pivot counterclockwise
+ * 1075 makes a perfect circle witin 5 degrees, giving a 1075 ticks per 90 degree pivot
+ * While 1050 is under 10 degrees, 1200 is over 40 degrees, 1100 is over 10 degrees, and 1000 is under 30 degrees
+ * @param angle A negative angle to pivot clockwise or a positive value to pivot counterclockwise
  */
-void pivot(int direction) {
+void pivot(float angle) {
   stepperRight.setCurrentPosition(0);
   stepperLeft.setCurrentPosition(0);
-  if (direction > 0) {
-    stepperRight.moveTo(1000);
+  if (angle > 0) {
+    stepperRight.moveTo(abs(angle*1075/90));
     stepperRight.setMaxSpeed(500); //set right motor speed
     stepperRight.runSpeedToPosition(); //move right motor
   } else {
-    stepperLeft.moveTo(1000);
+    stepperLeft.moveTo(abs(angle*1075/90));
     stepperLeft.setMaxSpeed(500); //set left motor speed
     stepperLeft.runSpeedToPosition(); //move left motor
   }
@@ -584,42 +596,50 @@ void pivot(int direction) {
 }
 
 /**
- * This function turns the robot forward a quarter circle with a given radius in one direction.
+ * This function spins the robot in one direction with inputted degrees.
+ * 2125 makes a perfect circle within 5 degrees, giving a 2125 ticks per 360 degree spin
+ * While 2000 is under 15 degrees, 2100 is under 10 degrees, 2150 is over 5 degrees
  * 
- * @param radius A turning radius in centimeters. A radius of 0 spins the robot in the clockwise direction 90 degrees (similar to calling spin() a quarter circle).
- * @param turnDirection An array of direction values
- *                        position 0: a forward [0] or reverse [1] turn
- *                        position 1: a left [0] or right [1] turn
+ * @param angle A negative angle to spin clockwise or a positive value to spin counterclockwise
  */
-void turn(float radius, bool turnDirection[2]) {
-  /*
-    seems to me that once a radius is given, the robot doesn't make the exact radius turn.
-    Steps I took:
-      1. I input a 15cm CW turn
-      2. Measure 15cm out from the center of the wheel
-      3. Start the robot, call the turn function, and stop the robot
-      5. Attempt to measure 15cm out from the center of the wheel
-      6. The robot is off by exactly 1.5cm
-      7. The robot is also crooked and isn't completing the turn properly
-    
-    Possible Solutions:
-      1. A proportional gain must be placed to counter the error
-      2. Count how many ticks are required for the robot to move forward and then turn
-      3. Have outer turn proportionally less than inner
-  */
+void spin(float angle) {
+  setBothStepperCurrentPosition(0, 0);
+  if (angle > 0) {
+    stepperRight.moveTo(abs(angle*2125/360));
+    stepperLeft.moveTo(-abs(angle*2125/360));
+  } else {
+    stepperRight.moveTo(-abs(angle*2125/360));
+    stepperLeft.moveTo(abs(angle*2125/360));
+  }
+  setBothStepperSpeed(500, 500); //set motor speeds
+  runAtSpeedToPosition(); //move motors
+  runToStop(); //run until the robot reaches the target
+}
 
+/**
+ * This function turns the robot a quarter circle with a given radius in one direction, forward or reverse.
+ * A proportional gain of 1.075 is used to adjust the error within 5 degrees
+ * While a proportional gain of 1.1 is over 10 degrees, 1.05 is under 10 degrees. Effectively, the error is 27 degrees per 360 degrees
+ * 
+ * @param radius A turning radius in centimeters. A radius of 0 spins the robot 90 degrees (similar to calling spin() a quarter circle).
+ * @param angle A positive angle value
+ * @param turnDirection An array of direction values
+ *                        MSB: a forward [0] or reverse [1] turn
+ *                        LSB: a left [0] or right [1] turn
+ */
+void turn(float radius, float angle, bool turnDirection[2]) {
   setBothStepperCurrentPosition(0, 0); //reset stepper positions
-  setBothStepperSpeed(400, 400); //set motor speeds
+  setBothStepperSpeed(500, 500); //set motor speeds
 
   //float diam = 60.0*radius/18; //60 steps per 18cm
-  float inner = 2.0 * 3.14 * (radius*1.2 - WIDTH_BOT/2.0) * (90.0/360.0) *0.95;
-  float outer = 2.0 * 3.14 * (radius*1.2 + WIDTH_BOT/2.0) * (90.0/360.0) *0.95;
+  float outerArc = (radius + (WIDTH_BOT-WIDTH_WHEEL)/2.0) * (angle*PI/180);
+  float innerArc = (radius - (WIDTH_BOT-WIDTH_WHEEL)/2.0) * (angle*PI/180);
 
-  int innerSteps = inner * 29.958;
-  int outerSteps = outer * 29.958;
+  int outerSteps = outerArc * FULL_REV/(2 * PI * RADIUS_WHEEL) * 1.075;
+  int innerSteps = innerArc * FULL_REV/(2 * PI * RADIUS_WHEEL) * 1.075;
 
   long positions[2]; // Array of desired stepper positions
-  
+
   // Check the turn direction (left or right, and forward or backward)
   if (turnDirection[0] == 0 && turnDirection[1] == 0) {
     positions[0] = outerSteps; //right motor absolute position
@@ -645,29 +665,15 @@ void turn(float radius, bool turnDirection[2]) {
   steppers.runSpeedToPosition(); // Blocks until all are in position
 }
 
-void forward(int rot) {
-  long positions[2]; // Array of desired stepper positions
-  stepperRight.setCurrentPosition(0);
-  stepperLeft.setCurrentPosition(0);
-  positions[0] = stepperRight.currentPosition() + rot;  //right motor absolute position
-  positions[1] = stepperLeft.currentPosition() + rot;   //left motor absolute position
-  stepperRight.move(positions[0]);  //move right motor to position
-  stepperLeft.move(positions[1]);   //move left motor to position
-  runToStop();//run until the robot reaches the target
-}
-
 /**
  * Moves robot forward a distance based on the distance input.
  * 
  * @param distance A value in centimeters
 */
-void forwardDist(int distance) {
-  encoder[LEFT] = 0;
-  encoder[RIGHT] = 0;
+void forward(float distance) {
+  setBothStepperCurrentPosition(0,0);
+  float steps = distance * FULL_REV/(2 * PI * RADIUS_WHEEL);
 
-  float steps = distance * CM_TO_STEPS;
-  float ticks = steps * STEPS_TO_TICKS;
-  
   stepperRight.moveTo(steps); //move one full rotation forward relative to current position
   stepperLeft.moveTo(steps); //move one full rotation forward relative to current position
   setBothStepperSpeed(500, 500); //set stepper speeds
@@ -675,19 +681,6 @@ void forwardDist(int distance) {
   stepperLeft.runSpeedToPosition(); //move left motor
 
   runToStop(); //run until the robot reaches the target
-/*
-  int errorLeft = ticks - encoder[LEFT];
-  int errorRight = ticks - encoder[RIGHT];
-
-  int correction = TICKS_TO_STEPS * max(errorLeft, errorRight);
-  setBothStepperCurrentPosition(0, 0); //reset stepper positions
-  stepperRight.moveTo(correction); //move one full rotation forward relative to current position
-  stepperLeft.moveTo(correction); //move one full rotation forward relative to current position
-  setBothStepperSpeed(250, 250); //set stepper speeds
-  stepperRight.runSpeedToPosition(); //move right motor
-  stepperLeft.runSpeedToPosition(); //move left motor
-  runToStop();
-  */
 }
 
 /**
@@ -695,80 +688,25 @@ void forwardDist(int distance) {
  * 
  * @param distance A value in centimeters
 */
-void reverse(int distance) {
-  float steps = distance * 29.9586;
-  Serial.print(steps);
-  stepperRight.moveTo(-steps); //move one full rotation forward relative to current position
-  stepperLeft.moveTo(-steps); //move one full rotation forward relative to current position
-  stepperRight.setMaxSpeed(500); //set right motor speed
-  stepperLeft.setMaxSpeed(500); //set left motor speed
-  stepperRight.runSpeedToPosition(); //move right motor
-  stepperLeft.runSpeedToPosition(); //move left motor
-  runToStop(); //run until the robot reaches the target
+void reverse(float distance) {
+  forward(-distance);
 }
 
 /**
- Calculates arc length needed to turn to angle and calls multistepper to turn robot
- After turning, encoders are used to error check and move robot again if it moved too much or too little
+ * Calculates arc length needed to turn to angle and calls multistepper to turn robot
+ * After turning, encoders are used to error check and move robot again if it moved too much or too little
 */
 void goToAngle(float angle) {
-  stepperRight.setCurrentPosition(0);
-  stepperLeft.setCurrentPosition(0);
-  encoder[LEFT] = 0;
-  encoder[RIGHT] = 0;
   digitalWrite(blueLED, LOW); //turn off red LED
   digitalWrite(grnLED, HIGH); //turn on green LED
   digitalWrite(ylwLED, LOW); //turn off yellow LED
-  float arclength = 2.0 * PI * RADIUS_BOT * (angle/360.0) * 0.89;
-  int steps = arclength * CM_TO_STEPS;
-  int ticks = steps * STEPS_TO_TICKS;
-  ticks = abs(ticks);
-
-  stepperRight.moveTo(steps);
-  stepperLeft.moveTo(-steps);
-  /*
-  Serial.print("Steps: ");
-  Serial.println(steps);
-  Serial.print("Ticks: ");
-  Serial.println(ticks);
-  */
-
-  setBothStepperSpeed(400, 400); //set motor speeds
-  stepperRight.runSpeedToPosition(); //move right motor
-  stepperLeft.runSpeedToPosition(); //move left motorw
-  runToStop();
-  
-  /*
-  Serial.print("Left Encoder: ");
-  Serial.println(encoder[LEFT]);
-  Serial.println("Right Endoder: ");
-  Serial.println(encoder[RIGHT]);
-  int errorLeft = ticks - encoder[LEFT];
-  int errorRight = ticks - encoder[RIGHT];
-  Serial.print("Error Left: ");
-  Serial.println(errorLeft);
-  Serial.print("Error Right: ");
-  Serial.println(errorRight);
-
-  int correctStepsLeft = errorLeft * TICKS_TO_STEPS;
-  int correctStepsRight = errorRight * TICKS_TO_STEPS;
-
-  setBothStepperCurrentPosition(0, 0); //reset stepper positions
-  Serial.print("Correction steps: ");
-  Serial.println(correctStepsLeft);
-  stepperRight.moveTo(-correctStepsRight);
-  stepperLeft.moveTo(correctStepsLeft);
-  stepperRight.runSpeedToPosition(); //move right motor
-  stepperLeft.runSpeedToPosition(); //move left motor
-
-  runToStop(); //run until the robot reaches the target
-  */
+  spin(angle);
 }
 
 /**
- Give the robot x y coordiantes in cm 
- Robot will then call goToAngle and spin to a direction that points to the coordiante
- Will then go calcualted distance to reach coordinate
+ * Give the robot x y coordiantes in cm 
+ * Robot will then call goToAngle and spin to a direction that points to the coordiante
+ * Will then go calcualted distance to reach coordinate
 */
 void goToGoal(float x, float y) {
   digitalWrite(blueLED, LOW); //turn off red LED
@@ -777,15 +715,21 @@ void goToGoal(float x, float y) {
 
   double radians = atan2(y, x); //returns angle to x, y in radians
   
-  float angle = (radians * 180.0/PI);
-  //Serial.print("Degrees: ");
-  //Serial.println(angle);
-  goToAngle(angle);
+  float degrees = (radians * 180.0/PI);
+  Serial.print("Degrees: ");
+  Serial.println(degrees);
+  goToAngle(degrees);
   float distance = sqrt((x*x) + (y*y));
 
-  forwardDist(distance);
+  forward(distance);
 }
 
+//*****************************
+// Lab 2 Methods
+//*****************************
+/**
+ * Updates the IR Sensors
+*/
 void updateIR() {
   int front = 0, back = 0, left = 0, right = 0;
   for (int i = 0;i < 5;i++) {
@@ -839,9 +783,8 @@ void updateIR() {
   }
 }
 
-/*
-   This is a sample updateSonar() function, the description and code should be updated to take an average, consider all sensors and reflect
-   the necesary changes for the lab requirements.
+/**
+ * Updates the Sonar Sensors
 */
 void updateSonar() {
   long left, right;
@@ -896,9 +839,8 @@ void updateSonar() {
   }
 }
 
-/*
-   This is a sample updateState() function, the description and code should be updated to reflect the actual state machine that you will implement
-   based upon the the lab requirements.
+/**
+ * Updates the state of robot motion
 */
 void updateState() {
   if (!(flag)) { //no sensors triggered
@@ -928,9 +870,8 @@ void updateState() {
   //    Serial.println(state, BIN);
 }
 
-/*
-  This is a sample updateSensors() function and it should be updated along with the description to reflect what you actually implemented
-  to meet the lab requirements.
+/**
+ * Updates the overall sensors
 */
 void updateSensors() {
   //  Serial.print("updateSensors\t");
@@ -947,25 +888,25 @@ void updateSensors() {
   delay(1000);     //added so that you can read the data on the serial monitor
 }
 
-/*
-  This function takes the sensor averages and adds them as vectors to if they meet the obstacle threshold.
-  This sets avoidVector to have the vector to pass to goToGoal
+/**
+ * This function takes the sensor averages and adds them as vectors to if they meet the obstacle threshold.
+ * This sets avoidVector to have the vector to pass to goToGoal
 */
 void randomWander() {
   int direction = random(-1, 1);
 }
 
-/*
-  Function executes the aggressive kid behavior, which is stopping at an obstacle and turning on the blue led;
+/**
+ * Function executes the aggressive kid behavior, which is stopping at an obstacle and turning on the blue led;
 */
 void aggressiveKid() {
   digitalWrite(blueLED, HIGH); //turn on blue LED
   stop();
 }
 
-/*
-  This function takes the sensor averages and adds them as vectors to if they meet the obstacle threshold.
-  This sets avoidVector to have the vector to pass to goToGoal
+/**
+ * This function takes the sensor averages and adds them as vectors to if they meet the obstacle threshold.
+ * This sets avoidVector to have the vector to pass to goToGoal
 */
 void avoid() {
   //updateSensors();
@@ -997,11 +938,11 @@ void avoid() {
   }
 } 
 
-/*
-   This is a sample robotMotion() function, the description and code should be updated to reflect the actual robot motion function that you will implement
-   based upon the the lab requirements.  Some things to consider, you cannot use a blocking motor function because you need to use sensor data to update
-   movement.  You also need to continue to poll    the sensors during the motion and update flags and state because this will serve as your interrupt to
-   stop or change movement.
+/**
+ * This is a sample robotMotion() function, the description and code should be updated to reflect the actual robot motion function that you will implement
+ * based upon the the lab requirements. Some things to consider, you cannot use a blocking motor function because you need to use sensor data to update
+ * movement. You also need to continue to poll the sensors during the motion and update flags and state because this will serve as your interrupt to
+ * stop or change movement.
 */
 void robotMotion() {
   if ((flag & 0b01) && aggressive) { //check for a collide state - aggressive kid
@@ -1053,19 +994,19 @@ void randWander() {
     } else if (wanderList[i] == 1) { //Move forward
       forward(3);
     } else if (wanderList[i] == 2) { //Move backward
-      forward(-4);
+      reverse(4);
     } else if (wanderList[i] == 3) { //Turn forward left
-      turn(5, FL);
+      turn(5, 10, FL);
     } else if (wanderList[i] == 4) { //Turn forward right
-      turn(5, FR);
+      turn(5, 10, FR);
     } else if (wanderList[i] == 5) { //Turn backward left
-      turn(5, BL);
+      turn(5, 10, BL);
     } else if (wanderList[i] == 6) { //Turn backward right
-      turn(5, BR);
-    } else if (wanderList[i] == 7) { //Spin right
-      turn(0, FL);
-    } else if (wanderList[i] == 8) { //Change motor speed
-      setBothStepperSpeed(250, 250); //set stepper speeds
+      turn(5, 10, BR);
+    } else if (wanderList[i] == 7) { //Spin left
+      spin(10);
+    } else if (wanderList[i] == 8) { //Spin right
+      spin(-10);
     }
   }
 }
